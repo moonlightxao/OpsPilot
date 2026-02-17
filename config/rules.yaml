@@ -1,0 +1,132 @@
+# ============================================================
+# OpsPilot 规则配置文件
+# 说明：所有业务逻辑（排序、映射）从此文件读取
+# ============================================================
+
+# 章节优先级 (数值越小越优先，对应 Word 输出顺序)
+# 对应 PRD 3.1 章节排序与过滤
+priority_rules:
+  "数据库脚本部署": 10
+  "上线代码包": 15
+  "应用配置": 20
+  "MQS配置": 30
+  "容器配置": 40
+  "集成任务配置": 50
+  "其他配置": 90
+
+# 动作语义展开库 (对应 PRD 3.2 任务聚合)
+# instruction: 操作说明文本，渲染在任务表格前
+# is_high_risk: 是否为高危操作，触发人工确认
+# render_table: 是否需要渲染任务清单表格
+action_library:
+  "新增":
+    instruction: "在配置管理中心，点击新增按钮，新增以下配置："
+    is_high_risk: false
+    render_table: true
+  "修改":
+    instruction: "在配置管理中心，定位以下配置项并修改："
+    is_high_risk: false
+    render_table: true
+  "删除":
+    instruction: "【高危操作】在配置管理中心，定位以下配置项并删除："
+    is_high_risk: true
+    render_table: true
+  "下线":
+    instruction: "【高危操作】在配置管理中心，定位以下配置项并执行下线操作："
+    is_high_risk: true
+    render_table: true
+  "重建":
+    instruction: "【高危操作】在配置管理中心，定位以下配置项并执行重建操作："
+    is_high_risk: true
+    render_table: true
+  "替换":
+    instruction: "在配置管理中心，定位以下配置项并执行替换操作："
+    is_high_risk: false
+    render_table: true
+  "启用":
+    instruction: "在配置管理中心，定位以下配置项并启用："
+    is_high_risk: false
+    render_table: true
+  "禁用":
+    instruction: "在配置管理中心，定位以下配置项并禁用："
+    is_high_risk: false
+    render_table: true
+  "部署":
+    instruction: "执行以下部署任务："
+    is_high_risk: false
+    render_table: true
+  "升级":
+    instruction: "执行以下升级任务："
+    is_high_risk: false
+    render_table: true
+
+# 高危操作关键字列表 (对应 PRD 3.3 风险识别)
+# 凡包含以下关键字的操作类型，均需触发人工确认流程
+high_risk_keywords:
+  - "删除"
+  - "下线"
+  - "重建"
+  - "停用"
+  - "卸载"
+
+# Sheet 类型与表头映射 (动态表头支持)
+# 定义不同 Sheet 类型在 Word 表格中应展示的列
+sheet_column_mapping:
+  "数据库脚本部署":
+    columns: ["脚本名称", "执行顺序", "数据库", "执行人", "备注"]
+  "上线代码包":
+    columns: ["应用名称", "版本号", "部署环境", "执行人", "备注"]
+  "应用配置":
+    columns: ["配置项", "配置值", "所属应用", "执行人", "备注"]
+  "MQS配置":
+    columns: ["Topic名称", "操作类型", "订阅关系", "执行人", "备注"]
+  "容器配置":
+    columns: ["容器名称", "镜像版本", "资源规格", "执行人", "备注"]
+  "集成任务配置":
+    columns: ["任务名称", "调度规则", "执行参数", "执行人", "备注"]
+
+# 默认表头（当 Sheet 未在映射中定义时使用）
+default_columns:
+  - "任务名"
+  - "操作类型"
+  - "部署单元"
+  - "执行人"
+  - "备注"
+
+# 核心解析字段定义 (对应 PRD 2. 输入数据规范)
+# 定义从 Excel 中必须提取的列名（支持多种别名匹配）
+core_fields:
+  task_name:
+    aliases: ["任务名", "任务名称", "Task Name", "任务"]
+    required: true
+  action_type:
+    aliases: ["操作类型", "操作", "Action", "动作"]
+    required: true
+  deploy_unit:
+    aliases: ["部署单元", "应用名", "服务名", "目标"]
+    required: false
+  executor:
+    aliases: ["执行人", "负责人", "执行", "复核人"]
+    required: false
+  external_link:
+    aliases: ["外部链接", "链接", "URL", "参考链接"]
+    required: false
+
+# Word 文档输出配置
+output_config:
+  # 标题样式
+  title_style:
+    font_name: "微软雅黑"
+    font_size: 16
+    bold: true
+  # 正文样式
+  body_style:
+    font_name: "宋体"
+    font_size: 11
+    bold: false
+  # 表头样式
+  table_header_style:
+    font_name: "微软雅黑"
+    font_size: 10
+    bold: true
+    background_color: "#D9E2F3"

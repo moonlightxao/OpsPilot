@@ -1,0 +1,98 @@
+---
+description: Git 代码提交规范：定义最小可提交单元与提交信息格式
+alwaysApply: true
+---
+
+# Git 代码提交规范
+
+## 最小可提交单元（MCU）定义
+
+每次完成以下任意一项工作，**必须立即提交并推送到远程仓库**：
+
+| 单元类型 | 示例 |
+|---------|------|
+| 单个函数/方法 | `parse_excel_header()`, `render_table()` |
+| 单个测试用例 | `test_excel_parser.py` 中的一个 `test_xxx` |
+| 单个配置修改 | `rules.yaml` 中新增一个映射规则 |
+| 单个文档更新 | `PROJECT_PROGRESS.md` 中勾选任务完成 |
+| 单个 Bug 修复 | 修复一个具体 issue |
+
+## 提交信息格式
+
+```
+<type>(<scope>): <subject>
+
+<body>
+```
+
+### Type 类型
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| `feat` | 新功能 | `feat(parser): 新增 Excel 多 Sheet 解析` |
+| `fix` | Bug 修复 | `fix(renderer): 修复表格边框渲染异常` |
+| `refactor` | 重构（不改变功能） | `refactor(parser): 拆分解析逻辑为独立函数` |
+| `test` | 测试相关 | `test(parser): 添加 parse_header 单元测试` |
+| `docs` | 文档更新 | `docs: 更新 PROJECT_PROGRESS 进度` |
+| `chore` | 构建/工具/配置 | `chore: 更新 requirements.txt` |
+
+### Scope 范围（按模块）
+
+- `parser` - 解析模块（`src/parser/`）
+- `renderer` - 渲染模块（`src/renderer/`）
+- `config` - 配置文件（`config/`）
+- `core` - 核心逻辑（`src/core/`）
+- `cli` - 命令行接口
+
+### Subject 主题
+
+- 使用中文简明描述
+- 不超过 50 字符
+- 不以句号结尾
+- 动词开头（新增、修复、更新、移除、重构）
+
+## Body 详细说明（可选）
+
+对于复杂变更，在空行后补充：
+
+```
+feat(parser): 新增 Excel 多 Sheet 解析
+
+- 支持 Sheet 名称匹配
+- 支持指定 Sheet 索引
+- 返回合并后的 report.json
+```
+
+## 禁止行为
+
+- ❌ 累积多个功能后一次性提交
+- ❌ 使用无意义提交信息（`update`, `fix bug`, `改动`）
+- ❌ 提交与主体无关的文件
+- ❌ 提交包含敏感信息的文件
+
+## 提交流程
+
+```bash
+# 1. 查看变更
+git status
+git diff
+
+# 2. 暂存变更（精确到文件）
+git add <specific_files>
+
+# 3. 提交（规范格式）
+git commit -m "feat(parser): 新增 Excel 多 Sheet 解析"
+
+# 4. 立即推送
+git push origin <branch>
+```
+
+## 完成任务后
+
+完成 `PROJECT_PROGRESS.md` 中的任务项后，必须同步更新进度文件并单独提交：
+
+```bash
+git add docs/PROJECT_PROGRESS.md
+git commit -m "docs: 更新进度 - 完成 Excel 解析模块"
+git push origin <branch>
+```

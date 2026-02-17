@@ -1,0 +1,19 @@
+# OpsPilot Dependencies
+# Python 3.9+ recommended
+
+# Excel 解析
+openpyxl>=3.1.0
+pandas>=2.0.0
+
+# Word 文档生成
+python-docx>=1.0.0
+
+# YAML 配置解析
+pyyaml>=6.0
+
+# 命令行参数
+click>=8.1.0
+
+# 测试框架
+pytest>=7.0.0
+pytest-cov>=4.0.0
