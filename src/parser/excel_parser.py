@@ -11,7 +11,7 @@ Excel Parser Module
 
 import re
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -21,6 +21,35 @@ from openpyxl import load_workbook
 
 # 抑制 openpyxl 的 DataValidation 警告
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+
+
+def _excel_serial_to_date(val: Any) -> str:
+    """
+    Excel 日期序列号转 YYYY-MM-DD。
+    1900-01-01 为 1，46315 约为 2026-10-xx。
+    """
+    if val is None:
+        return ""
+    if isinstance(val, (int, float)) and val > 0 and val < 2958466:
+        base = datetime(1899, 12, 30)  # Excel 基准
+        d = base + timedelta(days=int(val))
+        return d.strftime("%Y-%m-%d")
+    return str(val).strip()
+
+
+def _is_excel_serial_column(col: str) -> bool:
+    """
+    判断列名是否为 Excel 日期序列号（误作为列名）。
+    当 Excel 表头行某单元格为日期时，pandas 可能读出为 46315 等数字字符串。
+    """
+    s = str(col).strip()
+    if not s or not s.isdigit():
+        return False
+    try:
+        n = int(s)
+        return 1 <= n < 2958466
+    except ValueError:
+        return False
 
 
 class ExcelParserError(Exception):
@@ -194,14 +223,14 @@ class ExcelParser:
         """
         解析实施总表（Excel 第一个 Sheet 或按名称匹配的 Sheet）
         
-        不校验 core_fields，按行原样输出。用于第2章「实施步骤和计划」主体表格。
+        按 rules 中 implementation_summary 配置：
+        - 过滤 Unnamed、空列名
+        - 列映射到 output_columns
+        - 日期列做 Excel 序列号 → YYYY-MM-DD 转换
+        - 无序号列时自动生成 1,2,3...
         
-        Args:
-            excel_file: Excel 文件路径
-            available_sheets: 可用 Sheet 名称列表
-            
         Returns:
-            implementation_summary 字典，含 sheet_name, columns, rows, has_data
+            implementation_summary 字典，columns 固定为 output_columns 顺序
         """
         empty_result = {
             'sheet_name': '',
@@ -213,9 +242,15 @@ class ExcelParser:
         if not available_sheets:
             return empty_result
         
-        # 确定使用哪个 Sheet
         strategy = self._implementation_summary_config.get('strategy', 'first_sheet')
         sheet_names = self._implementation_summary_config.get('sheet_names', [])
+        output_columns = self._implementation_summary_config.get(
+            'output_columns', ['序号', '任务', '开始时间', '结束时间', '实施人', '复核人']
+        )
+        column_mapping = self._implementation_summary_config.get('column_mapping', {})
+        date_columns = set(self._implementation_summary_config.get('date_columns', ['开始时间', '结束时间']))
+        auto_sequence = self._implementation_summary_config.get('auto_sequence', True)
+        drop_unnamed = self._implementation_summary_config.get('drop_unnamed_columns', True)
         
         target_sheet = None
         if strategy == 'first_sheet':
@@ -235,47 +270,82 @@ class ExcelParser:
             if df.empty:
                 return {
                     'sheet_name': target_sheet,
-                    'columns': [],
+                    'columns': list(output_columns),
                     'rows': [],
                     'has_data': False
                 }
             
-            # 清洗：移除空行、非法字符
             df = self._clean_dataframe(df)
             
             if df.empty:
                 return {
                     'sheet_name': target_sheet,
-                    'columns': [],
+                    'columns': list(output_columns),
                     'rows': [],
                     'has_data': False
                 }
             
-            # 表头：使用 rules 配置或 Excel 第一行
-            columns_config = self._implementation_summary_config.get('columns')
-            if columns_config:
-                columns = columns_config
-            else:
-                columns = [str(c).strip() if pd.notna(c) else '' for c in df.columns.tolist()]
+            # 1. 过滤 Unnamed、空列名、Excel 日期序列号（46315 等误作列名）
+            cols_raw = [str(c).strip() if pd.notna(c) else '' for c in df.columns.tolist()]
+            if drop_unnamed:
+                keep_idx = [
+                    i for i, c in enumerate(cols_raw)
+                    if c
+                    and not (c.lower().startswith('unnamed') or c == '')
+                    and not _is_excel_serial_column(c)
+                ]
+                df = df.iloc[:, keep_idx]
+                cols_raw = [str(c).strip() if pd.notna(c) else '' for c in df.columns.tolist()]
             
-            # 数据行：按列顺序转为 cells 数组
+            excel_cols = cols_raw
+            
+            # 2. 建立标准列 -> Excel 列 映射
+            # column_mapping: { "序号": ["任务序号","序号",...], "任务": ["任务名",...], ... }
+            std_to_excel: dict[str, Optional[str]] = {}
+            for std_col in output_columns:
+                aliases = column_mapping.get(std_col, [std_col])
+                if isinstance(aliases, str):
+                    aliases = [aliases]
+                found = None
+                for ec in excel_cols:
+                    ec_norm = ec.strip()
+                    for alias in aliases:
+                        if str(alias).strip() == ec_norm:
+                            found = ec
+                            break
+                    if found:
+                        break
+                std_to_excel[std_col] = found
+            
+            # 3. 构建行数据：按 output_columns 顺序
             rows = []
-            for _, row in df.iterrows():
-                if columns_config:
-                    cells = []
-                    for col in columns:
-                        val = row.get(col, '')
-                        cells.append('' if pd.isna(val) else self._sanitize_string(str(val)))
-                else:
-                    cells = [
-                        '' if pd.isna(v) else self._sanitize_string(str(v))
-                        for v in row.values
-                    ]
+            for row_idx, row in df.iterrows():
+                cells = []
+                for std_col in output_columns:
+                    excel_col = std_to_excel.get(std_col)
+                    if std_col == '序号':
+                        if excel_col and excel_col in row.index:
+                            val = row.get(excel_col, '')
+                            cells.append('' if pd.isna(val) else self._sanitize_string(str(val)))
+                        elif auto_sequence:
+                            cells.append(str(row_idx + 1))
+                        else:
+                            cells.append('')
+                    elif excel_col and excel_col in row.index:
+                        val = row.get(excel_col, '')
+                        if pd.isna(val):
+                            cells.append('')
+                        elif std_col in date_columns:
+                            cells.append(_excel_serial_to_date(val))
+                        else:
+                            cells.append(self._sanitize_string(str(val)))
+                    else:
+                        cells.append('')
                 rows.append({'cells': cells})
             
             return {
                 'sheet_name': target_sheet,
-                'columns': columns,
+                'columns': list(output_columns),
                 'rows': rows,
                 'has_data': len(rows) > 0
             }
@@ -283,7 +353,7 @@ class ExcelParser:
             print(f"警告: 解析实施总表 '{target_sheet}' 时出错: {e}")
             return {
                 'sheet_name': target_sheet,
-                'columns': [],
+                'columns': list(output_columns),
                 'rows': [],
                 'has_data': False
             }

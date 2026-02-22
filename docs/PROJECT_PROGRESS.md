@@ -3,8 +3,8 @@
 ## 📊 总体进度状态
 - **当前阶段**: 需求迭代（输出与样例对齐）
 - **完成度**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░] 90%
-- **项目健康度**: 🟢 全部测试通过
-- **更新日期**: 2026-02-22
+- **项目健康度**: 🟡 测试通过，PM 验收：与样例对齐 不通过
+- **更新日期**: 2026-02-23
 
 ---
 
@@ -77,6 +77,9 @@ fastmcp>=0.1.0
 | 🟢 | 代码规范 | `src/parser/__init__.py` 模块导出已修复 | 已解决 | Developer |
 | 🟢 | 编码问题 | Windows 控制台 GBK 无法显示 emoji，已添加 safe_echo 函数处理 | 已解决 | Developer |
 | 🟢 | 需求变更 | 输出与样例不一致，技术方案已产出，待 Developer 实现 | 已解决 | Architect |
+| 🟢 | 验收缺陷 | 产出与样例不符，按 TECH_DESIGN v2 已实现 Parser/模板修正 | 已解决 | Developer |
+| 🟡 | 缺陷分析 | QA_DEFECT_REPORT 缺陷根因：实现滞后 + rules 配置遗漏，非技术方案问题 | 已分析 | Architect |
+| 🟡 | 配置遗漏 | rules.yaml 缺少「序号」列 column_mapping，黄金样本「任务序号」无法映射 | 已补充 | Architect |
 
 ---
 
@@ -102,11 +105,13 @@ fastmcp>=0.1.0
 
 ### 2.6 输出与样例对齐 (Owner: Architect + Developer) 🆕
 - [x] **技术方案设计**：针对 PRD「输出与样例对齐」需求，产出技术方案（含 report.json 扩展、模板调整、渲染流程） ✅ 2026-02-23
+- [x] **技术方案修订 v2**：PM 验收不通过后修订，明确第1/3～5部分、第2部分 2.1.x 层级、实施总表 6 列映射、日期转换、Unnamed 过滤 ✅ 2026-02-23
 - [x] **Sheet 1 上线安排**：明确如何将 Excel 第一个 Sheet 解析为表格并输出至第2章「实施步骤和计划」 ✅ 2026-02-23
 - [x] **样例样式对齐**：明确如何实现与 `实施文档.docx` 在章节结构、表格形式、排版样式上的视觉一致性 ✅ 2026-02-23
 - [x] **Parser 实施总表**：解析第一个 Sheet 为 implementation_summary，排除该 Sheet 不进入 sections ✅ 2026-02-23
+- [x] **Parser 列映射与日期**：实施总表 6 列映射、过滤 Unnamed、Excel 日期序列号转换（修订 v2） ✅ 2026-02-23
 - [x] **Renderer 实施总表**：context 注入 + 内置渲染增加 2.1 实施总表表格 ✅ 2026-02-23
-- [x] **模板实施总表区块**：create_template.py 增加 implementation_summary 条件表格 ✅ 2026-02-23
+- [x] **模板结构修订**：第1部分、第3～5部分、第2部分 2.1.x 层级、实施总表 6 列（修订 v2） ✅ 2026-02-23
 
 ### 2.5 MCP 服务化扩展 (Owner: Developer)
 - [x] **MCP 依赖安装**：`requirements.txt` 添加 `fastmcp>=0.1.0` ✅ 2026-02-22
@@ -126,6 +131,7 @@ fastmcp>=0.1.0
 - [x] **模板渲染测试**：验证 TemplateRenderer 内置渲染功能，62 个测试全部通过 ✅ 2026-02-22
 - [x] **v2.0 协议适配**：测试用例已更新适配 cells 数组格式 ✅ 2026-02-22
 - [x] **MCP 集成测试**：测试用例已创建（需安装 fastmcp 依赖后运行） ✅ 2026-02-22
+- [x] **黄金样本测试**：使用 上线checklist.xlsx + 实施文档.docx 端到端验证，2/2 通过 ✅ 2026-02-23
 
 ---
 
@@ -171,6 +177,14 @@ fastmcp>=0.1.0
 - **2026-02-23 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_OUTPUT_ALIGNMENT.md`，定义 implementation_summary 协议、rules 扩展、Parser/Renderer 调整路径
 - **2026-02-23 [Architect]** 配置与协议更新：rules.yaml 增加 implementation_summary 配置，report_schema.md 扩展 v2.1
 - **2026-02-23 [Developer]** 输出与样例对齐实现：Parser 解析第一个 Sheet 为 implementation_summary、排除进入 sections；TemplateRenderer 注入并渲染实施总表；create_template 增加 docxtpl 实施总表区块；测试用例适配 | 64 测试通过
+- **2026-02-23 [Tester]** 测试任务执行：66 passed / 1 skipped (MCP 需 fastmcp)；黄金样本端到端验证通过；边界测试、高危流程测试全部通过 | test_golden_sample.py 新增
+- **2026-02-23 [PM]** 需求验收：依据 PRD 第 6 节逐条核查，初判 5/5 通过
+- **2026-02-23 [PM]** 验收更正：对照 output/实施文档.docx 与 docs/Sample_Files/实施文档.docx 逐项比对，发现产出与标准严重不符 | 与样例对齐 不通过，缺陷已记录，已指派 Architect 修订方案
+- **2026-02-23 [Architect]** 技术方案修订 v2：产出 `TECH_DESIGN_OUTPUT_ALIGNMENT.md` v2.0，明确第1/3～5部分占位、第2部分 2.1.x 层级、实施总表 6 列映射、Excel 日期转换、Unnamed 过滤；更新 rules.yaml、report_schema.md
+- **2026-02-23 [Developer]** 缺陷修复：Parser 增加 Unnamed 过滤、列映射、Excel 日期转换、序号自动生成；create_template 增加第1/3～5部分、第2部分 2.1.x 结构、实施总表 6 列；TemplateRenderer context 适配 | 68 测试通过
+- **2026-02-23 [Tester]** 模板对比测试执行：新增 test_template_comparison.py 比对生成文档与样例；发现 2 项缺陷（实施总表列异常、第2部分层级不符）；已输出 `docs/QA_DEFECT_REPORT.md` 提单给 Developer
+- **2026-02-23 [Architect]** 缺陷分析完成：对照 QA_DEFECT_REPORT 与 TECH_DESIGN v2，判定技术方案正确；缺陷 #1 根因为 Parser 实现未完全生效 + rules.yaml 缺少「序号」列 column_mapping；缺陷 #2 为 create_template/template 未按 v2 落地；已补充 rules.yaml 序号映射，待 Developer 完成 Parser/模板修正
+- **2026-02-23 [Developer]** 缺陷 #1 修复：Parser 增加 _is_excel_serial_column 过滤 46315 等日期序列号列；统一 column_mapping 支持「任务序号」→「序号」；缺陷 #2：重新执行 create_template 生成 template.docx | 68 passed, 3 skipped
 
 ---
 
@@ -218,26 +232,52 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 ## 📅 阶段性里程碑
 - [x] **M1**: 跑通数据解析到 JSON 的全流程（数据对齐）✅ 2026-02-18
 - [ ] **M2**: 演示"高危挂起-确认"的协同交互（逻辑对齐）
-- [x] **M3**: 产出第一份完全符合样式的 Word 实施方案（成果对齐）✅ 2026-02-18
+- [ ] **M3**: 产出第一份完全符合样式的 Word 实施方案（成果对齐）❌ 2026-02-23 PM 复核：产出与样例不符
 - [x] **M4**: 模板填充方案验证通过（架构升级）✅ 2026-02-22
 - [x] **M5**: MCP 服务上线，外部 Agent 可调用（服务化）✅ 2026-02-22
 
 ---
 
+## ✅ PM 验收结论 (2026-02-23) — **更正：与样例对齐 不通过**
+
+依据 `docs/OpsPilot_PRD.md` 第 6 节验收标准，**对照 `output/实施文档.docx` 与 `docs/Sample_Files/实施文档.docx` 逐项核查**：
+
+| 验收项 | 标准 | 结论 | 说明 |
+|--------|------|------|------|
+| **与样例对齐** | 章节结构、表格形式、排版样式可视觉比对一致 | ❌ **不通过** | 详见下方缺陷记录 |
+| 实施总表来源 | 第2章实施总表来自 Excel Sheet 1 | ⚠️ 待复核 | 实施总表表格列错乱（见缺陷） |
+| 逻辑闭环 | 任务明细与 Excel 源数据严格对应 | ✅ 通过 | 数据完整性测试通过 |
+| 聚合正确 | 同类操作成功聚合 | ✅ 通过 | 测试通过 |
+| 安全拦截 | 高危操作识别并提示确认 | ✅ 通过 | 测试通过 |
+
+### 🔴 缺陷记录：产出与标准文档结构严重不符
+
+| 缺陷项 | 标准文档 (Sample) | 项目产出 (Output) |
+|--------|-------------------|-------------------|
+| **第1部分缺失** | 有「1 原因和目的」及 1.1 变更应用、1.2 变更原因和目的、1.3 变更影响 | 完全缺失 |
+| **第2部分结构错误** | 「2 实施步骤和计划」→「2.1 详细实施步骤」→ 2.1.1～2.1.5【标准】各子章节 | 仅有「2.1 实施总表」「2.2 详细步骤」，层级与命名不符 |
+| **实施总表表格异常** | 列：序号\|任务\|开始时间\|结束时间\|实施人\|复核人 | 出现「46315」「Unnamed:6」等列，疑似 Excel 日期/未命名列未正确映射 |
+| **详细步骤结构不符** | 各 2.1.x 下有操作说明 + 对应任务表格 | 未按 2.1.1/2.1.2… 子节组织 |
+| **第3～5部分** | 有 3 实施后验证计划、4 应急回退措施、5 风险分析和规避措施 | 缺失 |
+
+**验收结果**：4/5 通过，**与样例对齐 不通过**。产出文档与 PRD 要求的「结构和样式完全一致」不符。
+
+---
+
 ## 📣 下一步指派
 
-**项目状态**: ✅ 输出与样例对齐实现已完成
+**项目状态**: ❌ 与样例对齐 验收不通过，需 Architect 修订技术方案、Developer 修正模板与解析
 
 ### 致 Architect
-2.6 任务已完成：技术方案已产出， Developer 已实现全部实现任务
+**已完成**：修订技术方案 v2（`docs/TECH_DESIGN_OUTPUT_ALIGNMENT.md`）；缺陷分析结论：技术方案无问题，根因为实现滞后 + 配置遗漏；已补充 rules.yaml「序号」列 column_mapping。
 
 ### 致 Developer
-**实现任务（P0）**：已全部完成 ✅
-- 任务 1-2：rules/report_schema 已由 Architect 更新
-- 任务 3-4：Parser 解析第一个 Sheet 为 implementation_summary，并排除该 Sheet 进入 sections
-- 任务 5-6：TemplateRenderer 注入 implementation_summary，内置渲染增加实施总表表格
-- 任务 7：create_template.py regenerate 已增加实施总表区块
-- 任务 8：单元测试 / 端到端测试已适配（64 passed）
+**待修复**：已全部完成 ✅ 2026-02-23
+- **缺陷 #1**：Parser 已增加 `_is_excel_serial_column` 过滤 46315 等日期序列号列；序号列映射使用 column_mapping 支持「任务序号」→「序号」
+- **缺陷 #2**：template.docx 已按 create_template.py 重新生成，结构为 2.1 详细实施步骤 + 2.1.1～2.1.N 子节
+
+**历史 P0（已执行）**：按 `TECH_DESIGN_OUTPUT_ALIGNMENT.md` v2 已执行
+- 任务 1～5：rules、Parser、create_template、template.docx、测试适配 ✅
 
 ### 致 Developer（历史任务）
 此前 P0/P1 任务已完成：
@@ -251,7 +291,8 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 - ✅ **模板渲染测试**：TemplateRenderer 内置渲染功能已验证
 - ✅ **v2.0 协议适配**：测试用例已更新适配 cells 数组格式
 - ✅ **MCP 集成测试**：测试用例已创建（需安装 fastmcp 后运行）
-- ✅ **测试结果**：62/62 核心测试通过
+- ✅ **黄金样本测试**：上线checklist.xlsx + 实施文档.docx 端到端验证 2/2 通过
+- ✅ **测试结果**：66 passed / 1 skipped（MCP 依赖 fastmcp）
 
 ---
 
