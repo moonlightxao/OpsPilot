@@ -1,8 +1,8 @@
 # 🚀 OpsPilot 项目执行看板
 
 ## 📊 总体进度状态
-- **当前阶段**: 项目完成
-- **完成度**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
+- **当前阶段**: 需求迭代（输出与样例对齐）
+- **完成度**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░] 90%
 - **项目健康度**: 🟢 全部测试通过
 - **更新日期**: 2026-02-22
 
@@ -76,6 +76,7 @@ fastmcp>=0.1.0
 | 🟢 | 逻辑风险 | 非标准换行已在 `_sanitize_string` 中处理 | 已解决 | Developer |
 | 🟢 | 代码规范 | `src/parser/__init__.py` 模块导出已修复 | 已解决 | Developer |
 | 🟢 | 编码问题 | Windows 控制台 GBK 无法显示 emoji，已添加 safe_echo 函数处理 | 已解决 | Developer |
+| 🟢 | 需求变更 | 输出与样例不一致，技术方案已产出，待 Developer 实现 | 已解决 | Architect |
 
 ---
 
@@ -99,7 +100,15 @@ fastmcp>=0.1.0
 - [x] **模板渲染器开发**：基于 `docxtpl` 实现模板填充 ✅ 2026-02-22
 - [x] **Parser 适配 v2.0**：修改 report.json 输出格式适配新协议 ✅ 2026-02-22
 
-### 2.5 MCP 服务化扩展 (Owner: Developer) 🆕
+### 2.6 输出与样例对齐 (Owner: Architect + Developer) 🆕
+- [x] **技术方案设计**：针对 PRD「输出与样例对齐」需求，产出技术方案（含 report.json 扩展、模板调整、渲染流程） ✅ 2026-02-23
+- [x] **Sheet 1 上线安排**：明确如何将 Excel 第一个 Sheet 解析为表格并输出至第2章「实施步骤和计划」 ✅ 2026-02-23
+- [x] **样例样式对齐**：明确如何实现与 `实施文档.docx` 在章节结构、表格形式、排版样式上的视觉一致性 ✅ 2026-02-23
+- [x] **Parser 实施总表**：解析第一个 Sheet 为 implementation_summary，排除该 Sheet 不进入 sections ✅ 2026-02-23
+- [x] **Renderer 实施总表**：context 注入 + 内置渲染增加 2.1 实施总表表格 ✅ 2026-02-23
+- [x] **模板实施总表区块**：create_template.py 增加 implementation_summary 条件表格 ✅ 2026-02-23
+
+### 2.5 MCP 服务化扩展 (Owner: Developer)
 - [x] **MCP 依赖安装**：`requirements.txt` 添加 `fastmcp>=0.1.0` ✅ 2026-02-22
 - [x] **MCP 目录创建**：创建 `src/mcp/` 目录及 `__init__.py` ✅ 2026-02-22
 - [x] **MCP Server 实现**：`src/mcp/server.py` 实现 3 个 MCP Tool ✅ 2026-02-22
@@ -157,6 +166,11 @@ fastmcp>=0.1.0
 - **2026-02-22 [Tester]** 模板渲染测试完成：test_renderer.py 覆盖 TemplateRenderer 全部功能
 - **2026-02-22 [Tester]** MCP 集成测试创建：新增 test_mcp.py 覆盖 3 个 MCP Tool 测试
 - **2026-02-22 [Tester]** 测试通过：62 个核心测试全部通过（Parser 30 + Renderer 22 + E2E 10）
+- **2026-02-23 [PM]** 需求细化：用户反馈输出与样例不一致，细化「输出与样例对齐」需求 | 更新 OpsPilot_PRD.md
+- **2026-02-23 [PM]** 指派修正：将 2.6 任务指派由 Developer 改为 Architect，遵循「需求→架构师技术方案→开发」流程
+- **2026-02-23 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_OUTPUT_ALIGNMENT.md`，定义 implementation_summary 协议、rules 扩展、Parser/Renderer 调整路径
+- **2026-02-23 [Architect]** 配置与协议更新：rules.yaml 增加 implementation_summary 配置，report_schema.md 扩展 v2.1
+- **2026-02-23 [Developer]** 输出与样例对齐实现：Parser 解析第一个 Sheet 为 implementation_summary、排除进入 sections；TemplateRenderer 注入并渲染实施总表；create_template 增加 docxtpl 实施总表区块；测试用例适配 | 64 测试通过
 
 ---
 
@@ -212,10 +226,21 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 
 ## 📣 下一步指派
 
-**项目状态**: ✅ 项目完成
+**项目状态**: ✅ 输出与样例对齐实现已完成
+
+### 致 Architect
+2.6 任务已完成：技术方案已产出， Developer 已实现全部实现任务
 
 ### 致 Developer
-所有 P0 和 P1 优先级任务已完成：
+**实现任务（P0）**：已全部完成 ✅
+- 任务 1-2：rules/report_schema 已由 Architect 更新
+- 任务 3-4：Parser 解析第一个 Sheet 为 implementation_summary，并排除该 Sheet 进入 sections
+- 任务 5-6：TemplateRenderer 注入 implementation_summary，内置渲染增加实施总表表格
+- 任务 7：create_template.py regenerate 已增加实施总表区块
+- 任务 8：单元测试 / 端到端测试已适配（64 passed）
+
+### 致 Developer（历史任务）
+此前 P0/P1 任务已完成：
 - ✅ docxtpl 依赖已安装
 - ✅ 模板渲染器 `src/renderer/template_renderer.py` 已完成
 - ✅ Parser 已适配 report.json v2.0

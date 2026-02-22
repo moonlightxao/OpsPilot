@@ -50,7 +50,7 @@ class ExcelParser:
     """
     
     # 协议版本号
-    PROTOCOL_VERSION = "2.0.0"
+    PROTOCOL_VERSION = "2.1.0"
     
     # 非法字符正则（控制字符和不可见字符）
     ILLEGAL_CHAR_PATTERN = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
@@ -88,6 +88,7 @@ class ExcelParser:
         self._high_risk_keywords = self._config.get('high_risk_keywords', [])
         self._sheet_column_mapping = self._config.get('sheet_column_mapping', {})
         self._default_columns = self._config.get('default_columns', [])
+        self._implementation_summary_config = self._config.get('implementation_summary', {})
     
     def get_sheets(self) -> list[str]:
         """
@@ -122,6 +123,15 @@ class ExcelParser:
         available_sheets = workbook.sheetnames
         workbook.close()
         
+        # 【实施总表】解析第一个 Sheet 作为 implementation_summary
+        # 策略：first_sheet=固定第一个 Sheet；name_match=按名称匹配
+        implementation_summary = self._parse_implementation_summary(
+            excel_file, available_sheets
+        )
+        
+        # 确定实施总表使用的 Sheet 名称，该 Sheet 不进入 sections
+        impl_summary_sheet_name = implementation_summary.get('sheet_name', '')
+        
         # 解析结果容器
         sections = []
         all_external_links = []
@@ -129,11 +139,10 @@ class ExcelParser:
         total_tasks = 0
         high_risk_count = 0
         
-        # 按优先级顺序处理每个 Sheet
-        # 过滤出存在于 Excel 中的 Sheet，并按优先级排序
+        # 按优先级顺序处理每个 Sheet，排除已作为实施总表的 Sheet
         sheets_to_process = [
             sheet for sheet in self._priority_rules.keys()
-            if sheet in available_sheets
+            if sheet in available_sheets and sheet != impl_summary_sheet_name
         ]
         sheets_to_process.sort(key=lambda x: self._priority_rules.get(x, 999))
         
@@ -173,10 +182,111 @@ class ExcelParser:
             },
             'has_risk_alerts': len(risk_alerts) > 0,
             'risk_alerts': risk_alerts,
+            'implementation_summary': implementation_summary,
             'sections': sections
         }
         
         return result
+    
+    def _parse_implementation_summary(
+        self, excel_file: Path, available_sheets: list[str]
+    ) -> dict:
+        """
+        解析实施总表（Excel 第一个 Sheet 或按名称匹配的 Sheet）
+        
+        不校验 core_fields，按行原样输出。用于第2章「实施步骤和计划」主体表格。
+        
+        Args:
+            excel_file: Excel 文件路径
+            available_sheets: 可用 Sheet 名称列表
+            
+        Returns:
+            implementation_summary 字典，含 sheet_name, columns, rows, has_data
+        """
+        empty_result = {
+            'sheet_name': '',
+            'columns': [],
+            'rows': [],
+            'has_data': False
+        }
+        
+        if not available_sheets:
+            return empty_result
+        
+        # 确定使用哪个 Sheet
+        strategy = self._implementation_summary_config.get('strategy', 'first_sheet')
+        sheet_names = self._implementation_summary_config.get('sheet_names', [])
+        
+        target_sheet = None
+        if strategy == 'first_sheet':
+            target_sheet = available_sheets[0]
+        elif strategy == 'name_match' and sheet_names:
+            for name in sheet_names:
+                if name in available_sheets:
+                    target_sheet = name
+                    break
+        
+        if not target_sheet:
+            return empty_result
+        
+        try:
+            df = pd.read_excel(excel_file, sheet_name=target_sheet, header=0)
+            
+            if df.empty:
+                return {
+                    'sheet_name': target_sheet,
+                    'columns': [],
+                    'rows': [],
+                    'has_data': False
+                }
+            
+            # 清洗：移除空行、非法字符
+            df = self._clean_dataframe(df)
+            
+            if df.empty:
+                return {
+                    'sheet_name': target_sheet,
+                    'columns': [],
+                    'rows': [],
+                    'has_data': False
+                }
+            
+            # 表头：使用 rules 配置或 Excel 第一行
+            columns_config = self._implementation_summary_config.get('columns')
+            if columns_config:
+                columns = columns_config
+            else:
+                columns = [str(c).strip() if pd.notna(c) else '' for c in df.columns.tolist()]
+            
+            # 数据行：按列顺序转为 cells 数组
+            rows = []
+            for _, row in df.iterrows():
+                if columns_config:
+                    cells = []
+                    for col in columns:
+                        val = row.get(col, '')
+                        cells.append('' if pd.isna(val) else self._sanitize_string(str(val)))
+                else:
+                    cells = [
+                        '' if pd.isna(v) else self._sanitize_string(str(v))
+                        for v in row.values
+                    ]
+                rows.append({'cells': cells})
+            
+            return {
+                'sheet_name': target_sheet,
+                'columns': columns,
+                'rows': rows,
+                'has_data': len(rows) > 0
+            }
+        except Exception as e:
+            print(f"警告: 解析实施总表 '{target_sheet}' 时出错: {e}")
+            return {
+                'sheet_name': target_sheet,
+                'columns': [],
+                'rows': [],
+                'has_data': False
+            }
     
     def _parse_sheet(self, excel_file: Path, sheet_name: str) -> Optional[dict]:
         """

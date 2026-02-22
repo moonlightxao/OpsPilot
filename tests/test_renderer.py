@@ -81,6 +81,29 @@ class TestTemplateRendererRender:
         assert Path(result).exists()
         assert Path(result).parent.exists()
     
+    def test_render_implementation_summary_table(self, sample_config, temp_dir):
+        """测试实施总表表格渲染"""
+        report_with_impl = {
+            'meta': {'source_file': 'test.xlsx', 'version': '2.1.0'},
+            'summary': {'total_tasks': 0, 'total_sheets': 0, 'high_risk_count': 0,
+                        'has_external_links': False, 'external_links': []},
+            'has_risk_alerts': False, 'risk_alerts': [],
+            'implementation_summary': {
+                'sheet_name': '上线安排',
+                'columns': ['阶段', '任务', '负责人'],
+                'rows': [{'cells': ['准备', '环境检查', '张三']}, {'cells': ['部署', '脚本执行', '李四']}],
+                'has_data': True,
+            },
+            'sections': [],
+        }
+        renderer = TemplateRenderer(config_path=str(sample_config))
+        output_path = temp_dir / "impl_summary.docx"
+        _render(renderer, report_with_impl, output_path)
+        doc = Document(str(output_path))
+        text = '\n'.join([p.text for p in doc.paragraphs])
+        assert '2.1 实施总表' in text
+        assert len(doc.tables) >= 1
+
     def test_render_document_structure(self, sample_config, sample_report, temp_dir):
         renderer = TemplateRenderer(config_path=str(sample_config))
         output_path = temp_dir / "structure_test.docx"

@@ -22,6 +22,11 @@ def temp_dir():
 def sample_config(temp_dir):
     """创建测试用 rules.yaml 配置文件"""
     config_data = {
+        'implementation_summary': {
+            'strategy': 'first_sheet',
+            'sheet_names': ['上线安排', '实施总表'],
+            'columns': None,
+        },
         'priority_rules': {
             "数据库脚本部署": 10,
             "上线代码包": 15,
@@ -109,10 +114,18 @@ def sample_config(temp_dir):
 
 @pytest.fixture
 def sample_excel(temp_dir):
-    """创建测试用 Excel 文件（同时包含 core_fields 和 sheet_column_mapping 列名）"""
-    # Sheet 1: 数据库脚本部署
-    # 需要包含 core_fields 中的列名（用于动态表头匹配）
-    # 以及 sheet_column_mapping 中的列名（用于 cells 提取）
+    """创建测试用 Excel 文件（同时包含 core_fields 和 sheet_column_mapping 列名）
+    注意：第一个 Sheet 固定为实施总表（implementation_summary），不进入 sections
+    """
+    # Sheet 1: 上线安排（实施总表，strategy=first_sheet 时解析为该结构）
+    df0 = pd.DataFrame({
+        '阶段': ['准备', '部署', '验证'],
+        '任务': ['环境检查', '脚本执行', '功能验证'],
+        '负责人': ['张三', '李四', '王五'],
+        '计划时间': ['09:00', '10:00', '11:00']
+    })
+
+    # Sheet 2: 数据库脚本部署
     df1 = pd.DataFrame({
         '任务名': ['创建用户表', '添加索引', '删除临时表'],
         '操作类型': ['新增', '新增', '删除'],
@@ -122,40 +135,45 @@ def sample_excel(temp_dir):
         '执行人': ['张三', '李四', '王五'],
         '备注': ['初始化脚本', '性能优化', '清理废弃数据']
     })
-    
-    # Sheet 2: 上线代码包
+
+    # Sheet 3: 上线代码包
     df2 = pd.DataFrame({
-        '任务名称': ['部署服务A', '升级服务B'],  # core_fields 别名
-        '操作': ['部署', '升级'],  # core_fields 别名
+        '任务名称': ['部署服务A', '升级服务B'],
+        '操作': ['部署', '升级'],
         '应用名称': ['service-a', 'service-b'],
         '版本号': ['v1.0.0', 'v2.0.0'],
         '部署环境': ['prod', 'prod'],
         '执行人': ['张三', '李四'],
         '备注': ['新服务', '版本升级']
     })
-    
+
     excel_path = temp_dir / "test_checklist.xlsx"
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+        df0.to_excel(writer, sheet_name='上线安排', index=False)
         df1.to_excel(writer, sheet_name='数据库脚本部署', index=False)
         df2.to_excel(writer, sheet_name='上线代码包', index=False)
-    
+
     return excel_path
 
 
 @pytest.fixture
 def sample_excel_with_high_risk(temp_dir):
-    """创建包含高危操作的测试 Excel 文件"""
+    """创建包含高危操作的测试 Excel 文件
+    第一个 Sheet 为实施总表占位，第二个 Sheet 为应用配置（含高危操作）
+    """
+    df0 = pd.DataFrame({'阶段': ['准备'], '任务': ['检查'], '负责人': ['张三']})
     df = pd.DataFrame({
         '任务名': ['删除用户数据', '下线服务C', '普通修改'],
         '操作类型': ['删除', '下线', '修改'],
         '执行人': ['张三', '李四', '王五'],
         '备注': ['高危操作', '高危操作', '普通操作']
     })
-    
+
     excel_path = temp_dir / "test_high_risk.xlsx"
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+        df0.to_excel(writer, sheet_name='上线安排', index=False)
         df.to_excel(writer, sheet_name='应用配置', index=False)
-    
+
     return excel_path
 
 
@@ -209,6 +227,12 @@ def sample_report():
                 'task_names': ['删除临时表']
             }
         ],
+        'implementation_summary': {
+            'sheet_name': '',
+            'columns': [],
+            'rows': [],
+            'has_data': False,
+        },
         'sections': [
             {
                 'section_name': '应用配置',

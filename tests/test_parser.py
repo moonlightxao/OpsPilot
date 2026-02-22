@@ -58,7 +58,7 @@ class TestExcelParserParse:
         
         # 验证 meta
         assert result['meta']['source_file'] == 'test_checklist.xlsx'
-        assert result['meta']['version'] == '2.0.0'  # v2.0 协议
+        assert result['meta']['version'] == '2.1.0'  # v2.1 协议（含 implementation_summary）
     
     def test_parse_multiple_sheets(self, sample_config, sample_excel):
         """测试解析多 Sheet Excel"""
@@ -97,6 +97,18 @@ class TestExcelParserParse:
         with pytest.raises(FileNotFoundError):
             parser.parse(str(temp_dir / "not_exist.xlsx"))
     
+    def test_implementation_summary_from_first_sheet(self, sample_config, sample_excel):
+        """测试第一个 Sheet 解析为 implementation_summary"""
+        parser = ExcelParser(config_path=str(sample_config))
+        result = parser.parse(str(sample_excel))
+
+        impl = result.get('implementation_summary', {})
+        assert impl.get('has_data') is True
+        assert impl.get('sheet_name') == '上线安排'
+        assert 'columns' in impl
+        assert 'rows' in impl
+        assert len(impl['rows']) >= 1
+
     def test_parse_empty_excel(self, sample_config, empty_excel):
         """测试解析空 Excel 文件"""
         parser = ExcelParser(config_path=str(sample_config))

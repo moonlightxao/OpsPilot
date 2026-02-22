@@ -140,7 +140,17 @@ class TemplateRenderer:
         if report.get('has_risk_alerts', False):
             self._render_risk_alerts(doc, report.get('risk_alerts', []))
         
-        # 渲染章节
+        # 渲染实施总表（第2章主体表格）
+        impl_summary = report.get('implementation_summary', {})
+        if impl_summary.get('has_data', False):
+            doc.add_heading('2.1 实施总表', level=1)
+            self._render_implementation_summary_table(
+                doc, impl_summary.get('columns', []), impl_summary.get('rows', [])
+            )
+            doc.add_paragraph()
+        
+        # 渲染章节（详细步骤）
+        doc.add_heading('2.2 详细步骤', level=1)
         sections = report.get('sections', [])
         sections_sorted = sorted(sections, key=lambda x: x.get('priority', 999))
         
@@ -156,11 +166,30 @@ class TemplateRenderer:
     
     def _prepare_context(self, report: dict) -> dict:
         """准备模板渲染上下文"""
+        impl_summary = report.get('implementation_summary', {})
+        if not impl_summary:
+            impl_summary = {
+                'sheet_name': '',
+                'columns': [],
+                'rows': [],
+                'has_data': False
+            }
+        # 为 docxtpl 模板填充：预定义最大 8 列，避免表格访问越界
+        if impl_summary.get('has_data'):
+            cols = impl_summary.get('columns', [])
+            impl_summary = dict(impl_summary)
+            impl_summary['columns'] = list(cols) + [''] * max(0, 8 - len(cols))
+            padded_rows = []
+            for row in impl_summary.get('rows', []):
+                cells = list(row.get('cells', []))
+                padded_rows.append({'cells': cells + [''] * max(0, 8 - len(cells))})
+            impl_summary['rows'] = padded_rows
         return {
             'meta': report.get('meta', {}),
             'summary': report.get('summary', {}),
             'has_risk_alerts': report.get('has_risk_alerts', False),
             'risk_alerts': report.get('risk_alerts', []),
+            'implementation_summary': impl_summary,
             'sections': report.get('sections', [])
         }
     
@@ -261,6 +290,17 @@ class TemplateRenderer:
         # 任务表格
         if tasks and columns:
             self._render_task_table(doc, columns, tasks)
+    
+    def _render_implementation_summary_table(
+        self, 
+        doc: Document, 
+        columns: list, 
+        rows: list
+    ) -> None:
+        """渲染实施总表表格（第2章主体表格）"""
+        if not columns or not rows:
+            return
+        self._render_task_table(doc, columns, rows)
     
     def _render_task_table(
         self, 

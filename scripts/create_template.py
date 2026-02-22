@@ -103,7 +103,40 @@ def create_template():
 
     doc.add_paragraph()  # 空行
 
-    # ========== 章节循环 ==========
+    # ========== 2.1 实施总表（条件渲染） ==========
+    # 实施总表表格：预定义最大 8 列，表头与数据行使用 Jinja2 循环
+    impl_start = doc.add_paragraph()
+    impl_start.add_run('{%p if implementation_summary.has_data %}')
+    impl_heading = doc.add_heading('2.1 实施总表', level=1)
+    # 表格：8 列（与常见上线安排列数匹配），动态填充
+    impl_table = doc.add_table(rows=2, cols=8)
+    impl_table.style = 'Table Grid'
+    impl_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    header_cells = impl_table.rows[0].cells
+    for i in range(8):
+        cell = header_cells[i]
+        cell.text = '{%tc if implementation_summary.columns[' + str(i) + '] %}{{ implementation_summary.columns[' + str(i) + '] }}{%tc endif %}'
+        for paragraph in cell.paragraphs:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for run in paragraph.runs:
+                run.font.bold = True
+                set_run_font(run, '微软雅黑')
+        set_cell_shading(cell, 'D9E2F3')
+    data_cells = impl_table.rows[1].cells
+    data_cells[0].text = '{%tr for row in implementation_summary.rows %}{{ row.cells[0] }}'
+    for i in range(1, 7):
+        data_cells[i].text = '{{ row.cells[' + str(i) + '] }}'
+    data_cells[7].text = '{{ row.cells[7] }}{%tr endfor %}'
+    for cell in data_cells:
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                set_run_font(run, '宋体')
+    impl_end = doc.add_paragraph()
+    impl_end.add_run('{%p endif %}')
+
+    doc.add_paragraph()  # 空行
+
+    # ========== 2.2 详细步骤 - 章节循环 ==========
     # 使用 {%p for section in sections %} 进行段落级循环
     p_section_start = doc.add_paragraph()
     p_section_start.add_run('{%p for section in sections %}')
