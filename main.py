@@ -109,7 +109,7 @@ def analyze(excel_file: str, output: str, config: str):
 @cli.command()
 @click.argument('report_file', type=click.Path(exists=True))
 @click.option('--output', '-o', default='output/实施文档.docx', help='输出文件路径')
-@click.option('--template', '-t', default='templates/实施文档.doc', help='模板文件路径')
+@click.option('--template', '-t', default='templates/template.docx', help='模板文件路径（不存在时使用内置渲染）')
 @click.option('--config', '-c', default='config/rules.yaml', help='规则配置文件路径')
 def generate(report_file: str, output: str, template: str, config: str):
     """
@@ -120,16 +120,13 @@ def generate(report_file: str, output: str, template: str, config: str):
     click.echo(f"[Generate] 正在读取: {report_file}")
 
     try:
-        # 读取 report.json
         with open(report_file, 'r', encoding='utf-8') as f:
             report = json.load(f)
 
-        # 调用 Renderer 模块
-        from src.renderer import WordRenderer
-        renderer = WordRenderer(config_path=config)
+        from src.renderer import TemplateRenderer
+        renderer = TemplateRenderer(config_path=config)
+        output_path = renderer.render(report, template, output)
 
-        # 执行渲染
-        output_path = renderer.render(report, output)
         click.echo(f"[Generate] 输出文档: {output_path}")
         click.echo("[Generate] 文档生成完成")
 
@@ -175,9 +172,9 @@ def run(excel_file: str, output: str, config: str, force: bool):
 
         # 阶段 2: 生成
         click.echo("[Run] 阶段 2/2: 生成中...")
-        from src.renderer import WordRenderer
-        renderer = WordRenderer(config_path=config)
-        output_path = renderer.render(report, output)
+        from src.renderer import TemplateRenderer
+        renderer = TemplateRenderer(config_path=config)
+        output_path = renderer.render(report, "templates/template.docx", output)
 
         click.echo(f"[Run] 完成: {output_path}")
 

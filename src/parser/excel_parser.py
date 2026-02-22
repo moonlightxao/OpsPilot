@@ -11,7 +11,7 @@ Excel Parser Module
 
 import re
 import warnings
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -161,7 +161,7 @@ class ExcelParser:
         result = {
             'meta': {
                 'source_file': excel_file.name,
-                'generated_at': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'generated_at': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
                 'version': self.PROTOCOL_VERSION
             },
             'summary': {
@@ -488,19 +488,6 @@ class ExcelParser:
             value = raw_data.get(col, '')
             cells.append(str(value) if value else '')
         return cells
-    
-    def _extract_cells(self, raw_data: dict, field_mapping: dict) -> list[str]:
-        """
-        从原始数据中按配置的列顺序提取单元格值（已废弃，保留兼容）
-        
-        Args:
-            raw_data: 原始行数据字典
-            field_mapping: 字段映射（用于反向查找）
-            
-        Returns:
-            按列顺序排列的单元格值列表
-        """
-        return list(raw_data.values()) if raw_data else []
     
     def _get_columns_for_sheet(self, sheet_name: str) -> list[str]:
         """
