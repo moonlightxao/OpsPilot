@@ -50,7 +50,7 @@ class ExcelParser:
     """
     
     # 协议版本号
-    PROTOCOL_VERSION = "1.0.0"
+    PROTOCOL_VERSION = "2.0.0"
     
     # 非法字符正则（控制字符和不可见字符）
     ILLEGAL_CHAR_PATTERN = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
@@ -144,25 +144,18 @@ class ExcelParser:
                 sections.append(section_data)
                 total_tasks += section_data.get('task_count', 0)
                 
-                # 收集外部链接
-                for action_group in section_data.get('action_groups', []):
-                    for task in action_group.get('tasks', []):
-                        link = task.get('external_link')
-                        if link and link not in all_external_links:
-                            all_external_links.append(link)
-                
                 # 收集风险告警
                 for action_group in section_data.get('action_groups', []):
                     if action_group.get('is_high_risk'):
                         risk_alerts.append({
                             'sheet_name': sheet_name,
                             'action_type': action_group.get('action_type'),
-                            'task_count': len(action_group.get('tasks', [])),
+                            'task_count': action_group.get('task_count', 0),
                             'task_names': [
-                                t.get('task_name') for t in action_group.get('tasks', [])
+                                t.get('cells', [''])[0] for t in action_group.get('tasks', [])
                             ]
                         })
-                        high_risk_count += len(action_group.get('tasks', []))
+                        high_risk_count += action_group.get('task_count', 0)
         
         # 构建最终输出
         result = {
@@ -175,8 +168,10 @@ class ExcelParser:
                 'total_tasks': total_tasks,
                 'total_sheets': len(sections),
                 'high_risk_count': high_risk_count,
+                'has_external_links': len(all_external_links) > 0,
                 'external_links': all_external_links
             },
+            'has_risk_alerts': len(risk_alerts) > 0,
             'risk_alerts': risk_alerts,
             'sections': sections
         }
@@ -246,6 +241,9 @@ class ExcelParser:
                 action_groups[action_type].append(task_data)
             
             # 构建 action_groups 列表
+            # 获取该章节的列定义（用于 cells 提取）
+            columns = self._get_columns_for_sheet(sheet_name)
+            
             formatted_action_groups = []
             for action_type, tasks in action_groups.items():
                 # 从 action_library 获取操作说明
@@ -254,6 +252,16 @@ class ExcelParser:
                 # 判断是否高危操作
                 is_high_risk = self._is_high_risk(action_type)
                 
+                # 将任务数据转换为 cells 数组格式
+                formatted_tasks = []
+                for task in tasks:
+                    # 按列顺序提取 cells 数组
+                    cells = self._extract_cells_by_columns(
+                        task.get('raw_data', {}), 
+                        columns
+                    )
+                    formatted_tasks.append({'cells': cells})
+                
                 formatted_action_groups.append({
                     'action_type': action_type,
                     'instruction': action_config.get(
@@ -261,7 +269,8 @@ class ExcelParser:
                         f"执行以下{action_type}操作："
                     ),
                     'is_high_risk': is_high_risk,
-                    'tasks': tasks
+                    'task_count': len(formatted_tasks),
+                    'tasks': formatted_tasks
                 })
             
             # 获取章节优先级
@@ -270,6 +279,8 @@ class ExcelParser:
             return {
                 'section_name': sheet_name,
                 'priority': priority,
+                'has_action_groups': len(formatted_action_groups) > 0,
+                'columns': columns,
                 'task_count': sum(len(g['tasks']) for g in formatted_action_groups),
                 'action_groups': formatted_action_groups
             }
@@ -460,9 +471,40 @@ class ExcelParser:
         
         return False
     
-    def get_columns_for_sheet(self, sheet_name: str) -> list[str]:
+    def _extract_cells_by_columns(self, raw_data: dict, columns: list[str]) -> list[str]:
         """
-        获取指定 Sheet 应展示的列名（用于 Word 表格）
+        从原始数据中按配置的列顺序提取单元格值
+        
+        Args:
+            raw_data: 原始行数据字典 {列名: 值}
+            columns: 列名列表（定义顺序）
+            
+        Returns:
+            按列顺序排列的单元格值列表
+        """
+        cells = []
+        for col in columns:
+            # 从 raw_data 中按列名获取值，默认为空字符串
+            value = raw_data.get(col, '')
+            cells.append(str(value) if value else '')
+        return cells
+    
+    def _extract_cells(self, raw_data: dict, field_mapping: dict) -> list[str]:
+        """
+        从原始数据中按配置的列顺序提取单元格值（已废弃，保留兼容）
+        
+        Args:
+            raw_data: 原始行数据字典
+            field_mapping: 字段映射（用于反向查找）
+            
+        Returns:
+            按列顺序排列的单元格值列表
+        """
+        return list(raw_data.values()) if raw_data else []
+    
+    def _get_columns_for_sheet(self, sheet_name: str) -> list[str]:
+        """
+        获取指定 Sheet 应展示的列名
         
         Args:
             sheet_name: Sheet 名称
@@ -473,6 +515,18 @@ class ExcelParser:
         if sheet_name in self._sheet_column_mapping:
             return self._sheet_column_mapping[sheet_name].get('columns', [])
         return self._default_columns
+    
+    def get_columns_for_sheet(self, sheet_name: str) -> list[str]:
+        """
+        获取指定 Sheet 应展示的列名（公开接口）
+        
+        Args:
+            sheet_name: Sheet 名称
+            
+        Returns:
+            列名列表
+        """
+        return self._get_columns_for_sheet(sheet_name)
 
 
 # 便捷函数
