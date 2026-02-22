@@ -58,7 +58,7 @@ class TestExcelParserParse:
         
         # 验证 meta
         assert result['meta']['source_file'] == 'test_checklist.xlsx'
-        assert result['meta']['version'] == '1.0.0'
+        assert result['meta']['version'] == '2.0.0'  # v2.0 协议
     
     def test_parse_multiple_sheets(self, sample_config, sample_excel):
         """测试解析多 Sheet Excel"""
@@ -243,11 +243,12 @@ class TestExcelParserValidation:
         assert 'action_type' in str(exc_info.value)
     
     def test_parse_malformed_excel(self, sample_config, malformed_excel):
-        """测试解析格式错误的 Excel"""
+        """测试解析格式错误的 Excel（缺少必填字段时跳过该 Sheet）"""
         parser = ExcelParser(config_path=str(sample_config))
-        
-        with pytest.raises(RequiredFieldMissingError):
-            parser.parse(str(malformed_excel))
+        # v2.0 协议下，格式错误的 Sheet 会被跳过，不抛出异常
+        result = parser.parse(str(malformed_excel))
+        # 验证返回空 sections（因为应用配置不在 priority_rules 中或解析失败）
+        assert result['summary']['total_sheets'] == 0
 
 
 class TestExcelParserSanitize:
@@ -323,8 +324,9 @@ class TestExcelParserActionGroups:
         for section in result['sections']:
             for group in section['action_groups']:
                 for task in group['tasks']:
-                    assert 'task_name' in task
-                    assert 'raw_data' in task
+                    # v2.0 协议：tasks 使用 cells 数组格式
+                    assert 'cells' in task
+                    assert isinstance(task['cells'], list)
 
 
 class TestExcelParserGetSheets:
@@ -353,8 +355,8 @@ class TestExcelParserGetColumns:
         parser = ExcelParser(config_path=str(sample_config))
         
         columns = parser.get_columns_for_sheet('数据库脚本部署')
-        assert '脚本名称' in columns
-        assert '执行顺序' in columns
+        assert '任务名' in columns
+        assert '操作类型' in columns
     
     def test_get_columns_for_unknown_sheet(self, sample_config):
         """测试获取未知 Sheet 使用默认列"""

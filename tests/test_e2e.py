@@ -138,7 +138,6 @@ class TestEndToEnd:
     def test_data_integrity_from_excel_to_word(self, sample_config, sample_excel, temp_dir):
         """测试数据完整性：Excel -> JSON -> Word"""
         from src.parser import ExcelParser
-        from src.renderer import WordRenderer
         from docx import Document
         
         # 解析 Excel
@@ -148,12 +147,15 @@ class TestEndToEnd:
         # 验证任务数量
         assert report['summary']['total_tasks'] == 5  # 3 + 2
         
-        # 收集所有任务名
+        # 收集所有任务名（v2.0 协议：从 cells 数组中提取）
         excel_tasks = set()
         for section in report['sections']:
             for group in section['action_groups']:
                 for task in group['tasks']:
-                    excel_tasks.add(task['task_name'])
+                    # v2.0 协议：cells 数组的第一个元素通常是任务名
+                    cells = task.get('cells', [])
+                    if cells:
+                        excel_tasks.add(cells[0])
         
         assert '创建用户表' in excel_tasks
         assert '添加索引' in excel_tasks
@@ -163,8 +165,9 @@ class TestEndToEnd:
         
         # 生成 Word
         output_docx = temp_dir / "integrity_test.docx"
-        renderer = WordRenderer(config_path=str(sample_config))
-        renderer.render(report, str(output_docx))
+        from src.renderer import TemplateRenderer
+        renderer = TemplateRenderer(config_path=str(sample_config))
+        renderer.render(report, "templates/template.docx", str(output_docx))
         
         # 验证 Word 中包含所有任务
         doc = Document(str(output_docx))
@@ -182,7 +185,7 @@ class TestEndToEnd:
     def test_priority_order_preserved(self, sample_config, sample_excel, temp_dir):
         """测试优先级顺序在输出中保持"""
         from src.parser import ExcelParser
-        from src.renderer import WordRenderer
+        from src.renderer import TemplateRenderer
         from docx import Document
         
         # 解析
@@ -195,8 +198,8 @@ class TestEndToEnd:
         
         # 生成 Word
         output_docx = temp_dir / "priority_test.docx"
-        renderer = WordRenderer(config_path=str(sample_config))
-        renderer.render(report, str(output_docx))
+        renderer = TemplateRenderer(config_path=str(sample_config))
+        renderer.render(report, "templates/template.docx", str(output_docx))
         
         # 验证 Word 中顺序正确
         doc = Document(str(output_docx))

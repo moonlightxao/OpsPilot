@@ -52,10 +52,10 @@ def sample_config(temp_dir):
         'high_risk_keywords': ["删除", "下线", "重建"],
         'sheet_column_mapping': {
             "数据库脚本部署": {
-                'columns': ["脚本名称", "执行顺序", "数据库", "执行人", "备注"]
+                'columns': ["任务名", "操作类型", "执行人", "备注"]
             },
             "上线代码包": {
-                'columns': ["应用名称", "版本号", "部署环境", "执行人", "备注"]
+                'columns': ["任务名称", "操作", "应用名称", "版本号", "部署环境", "执行人", "备注"]
             },
         },
         'default_columns': ["任务名", "操作类型", "部署单元", "执行人", "备注"],
@@ -109,21 +109,29 @@ def sample_config(temp_dir):
 
 @pytest.fixture
 def sample_excel(temp_dir):
-    """创建测试用 Excel 文件"""
+    """创建测试用 Excel 文件（同时包含 core_fields 和 sheet_column_mapping 列名）"""
     # Sheet 1: 数据库脚本部署
+    # 需要包含 core_fields 中的列名（用于动态表头匹配）
+    # 以及 sheet_column_mapping 中的列名（用于 cells 提取）
     df1 = pd.DataFrame({
         '任务名': ['创建用户表', '添加索引', '删除临时表'],
         '操作类型': ['新增', '新增', '删除'],
+        '脚本名称': ['创建用户表', '添加索引', '删除临时表'],
+        '执行顺序': ['1', '2', '3'],
+        '数据库': ['user_db', 'order_db', 'temp_db'],
         '执行人': ['张三', '李四', '王五'],
         '备注': ['初始化脚本', '性能优化', '清理废弃数据']
     })
     
     # Sheet 2: 上线代码包
     df2 = pd.DataFrame({
-        '任务名称': ['部署服务A', '升级服务B'],
-        '操作': ['部署', '升级'],
+        '任务名称': ['部署服务A', '升级服务B'],  # core_fields 别名
+        '操作': ['部署', '升级'],  # core_fields 别名
+        '应用名称': ['service-a', 'service-b'],
+        '版本号': ['v1.0.0', 'v2.0.0'],
+        '部署环境': ['prod', 'prod'],
         '执行人': ['张三', '李四'],
-        '备注': ['v1.0.0', 'v2.0.0']
+        '备注': ['新服务', '版本升级']
     })
     
     excel_path = temp_dir / "test_checklist.xlsx"
@@ -178,19 +186,21 @@ def malformed_excel(temp_dir):
 
 @pytest.fixture
 def sample_report():
-    """创建测试用 report.json 数据"""
+    """创建测试用 report.json 数据 (v2.0 格式: columns + cells)"""
     return {
         'meta': {
             'source_file': 'test_checklist.xlsx',
             'generated_at': '2026-02-18T10:00:00Z',
-            'version': '1.0.0'
+            'version': '2.0.0'
         },
         'summary': {
             'total_tasks': 3,
             'total_sheets': 1,
             'high_risk_count': 1,
+            'has_external_links': False,
             'external_links': []
         },
+        'has_risk_alerts': True,
         'risk_alerts': [
             {
                 'sheet_name': '应用配置',
@@ -203,44 +213,26 @@ def sample_report():
             {
                 'section_name': '应用配置',
                 'priority': 20,
+                'has_action_groups': True,
+                'columns': ['任务名', '操作类型', '执行人', '备注'],
                 'task_count': 3,
                 'action_groups': [
                     {
                         'action_type': '新增',
                         'instruction': '新增以下配置：',
                         'is_high_risk': False,
+                        'task_count': 1,
                         'tasks': [
-                            {
-                                'task_name': '创建用户表',
-                                'deploy_unit': '',
-                                'executor': '张三',
-                                'external_link': '',
-                                'raw_data': {
-                                    '任务名': '创建用户表',
-                                    '操作类型': '新增',
-                                    '执行人': '张三',
-                                    '备注': '初始化脚本'
-                                }
-                            }
+                            {'cells': ['创建用户表', '新增', '张三', '初始化脚本']}
                         ]
                     },
                     {
                         'action_type': '删除',
                         'instruction': '【高危操作】删除以下配置：',
                         'is_high_risk': True,
+                        'task_count': 1,
                         'tasks': [
-                            {
-                                'task_name': '删除临时表',
-                                'deploy_unit': '',
-                                'executor': '王五',
-                                'external_link': '',
-                                'raw_data': {
-                                    '任务名': '删除临时表',
-                                    '操作类型': '删除',
-                                    '执行人': '王五',
-                                    '备注': '清理废弃数据'
-                                }
-                            }
+                            {'cells': ['删除临时表', '删除', '王五', '清理废弃数据']}
                         ]
                     }
                 ]
