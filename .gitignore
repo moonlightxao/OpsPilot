@@ -42,3 +42,7 @@ output/
 
 # Sample files (user provided)
 docs/Sample_Files/
+
+# Word 临时文件
+templates/~$*.docx
+*.bak

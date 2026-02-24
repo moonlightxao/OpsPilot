@@ -27,6 +27,25 @@ pip install -r requirements.txt
 
 ## 快速开始
 
+### 本地启动 & 测试速查
+
+```bash
+# 1. 创建并激活虚拟环境（可选但推荐）
+python -m venv .venv
+.\.venv\Scripts\activate  # Windows PowerShell
+
+# 2. 安装依赖
+pip install -r requirements.txt
+
+# 3. 使用示例 Excel 一键跑通完整流程（生成实施文档）
+python main.py run docs/Sample_Files/上线checklist.xlsx -o output/实施文档.docx
+
+# 4. 查看生成结果：output/实施文档.docx 与 docs/Sample_Files/实施文档.docx 对比
+
+# 5. 本地运行测试（含解析、渲染、模板对比等用例）
+pytest tests/
+```
+
 ### 两阶段执行（推荐）
 
 ```bash
