@@ -2,11 +2,12 @@
 
 自动化部署方案生成工具，通过解析规范化 Excel 清单（上线内容），自动输出符合样式的 Word 实施文档。
 
-**技术选型**：核心转换引擎 Python，渲染引擎 `python-docx`，模板引擎 `docxtpl` + Jinja2。
+**技术选型**：核心转换引擎 Python，渲染引擎 `python-docx` + `docxtpl`（Jinja2），模板引擎 `docxtpl` + Jinja2。
 
 ## 功能特性
 
 - **智能解析**：支持多 Sheet 结构的 Excel 文件，自动提取任务名、操作类型、部署单元等核心字段
+- **双轨渲染**：支持模板渲染（docxtpl + Jinja2）与内置渲染（python-docx）两种模式，配置驱动自动切换
 - **章节排序**：根据 `rules.yaml` 自动排序 Word 章节顺序，空数据自动跳过
 - **任务聚合**：相同操作类型的任务自动合并处理，生成规范化表格
 - **风险识别**：自动扫描并拦截删除、下线、重建等高危操作
@@ -90,24 +91,68 @@ python main.py run <excel_file> --force
 OpsPilot/
 ├── main.py                 # CLI 入口
 ├── config/
-│   └── rules.yaml          # 业务规则配置（排序、映射）
+│   └── rules.yaml          # 业务规则配置（排序、映射、渲染策略）
 ├── templates/
-│   └── template.docx       # Word 模板（Jinja2 占位符）
+│   ├── template.docx       # Word 模板（Jinja2 占位符）
+│   └── custom/             # 自定义模板目录
 ├── src/
 │   ├── parser/             # 解析模块（含聚合、高危检测）
 │   │   └── excel_parser.py
-│   ├── renderer/           # 渲染模块
-│   │   └── template_renderer.py   # docxtpl 模板填充
+│   ├── renderer/           # 渲染模块（支持模板/内置双轨）
+│   │   └── template_renderer.py
 │   └── mcp/                # MCP 服务层
 │       └── server.py       # FastMCP 服务实现
 ├── output/                 # 输出目录
-│   ├── report.json         # 中间态数据（report.json v2.0）
+│   ├── report.json         # 中间态数据（report.json v2.1）
 │   └── 实施文档.docx       # 生成的文档
 ├── tests/                  # 测试用例
 └── docs/
     ├── OpsPilot_PRD.md     # 产品需求文档
     ├── PROJECT_PROGRESS.md # 项目进度
     └── Sample_Files/       # 样例文件
+```
+
+## 双轨渲染架构
+
+OpsPilot 支持**三种渲染策略**，通过 `rules.yaml` 配置驱动：
+
+| 策略 | 说明 | 适用场景 |
+|------|------|----------|
+| `auto` | 优先模板，失败回退内置 | 默认策略，推荐使用 |
+| `template` | 严格使用模板，失败抛异常 | 需要精确控制输出样式 |
+| `builtin` | 仅使用内置渲染 | 无需模板，快速生成 |
+
+### 配置示例
+
+```yaml
+# config/rules.yaml
+render_config:
+  strategy: "auto"              # auto | template | builtin
+  template_path: "templates/template.docx"
+  fallback_to_builtin: true     # AUTO 策略下模板失败是否回退
+```
+
+### 模板规范
+
+模板文件使用 docxtpl 兼容的 Jinja2 语法：
+
+```jinja2
+{# 文档标题 #}
+{{ title }}
+
+{# 摘要信息 #}
+【摘要信息】
+• 任务总数：{{ summary.total_tasks }}
+• 涉及模块：{{ summary.total_sheets }} 个
+• 高危操作：{{ summary.high_risk_count }} 个
+
+{# 章节循环 #}
+{% for section in sections | sort(attribute='priority') %}
+{{ section.section_name }}
+{% for action_group in section.action_groups %}
+{% if action_group.is_high_risk %}⚠️ {% endif %}{{ action_group.action_type }}
+{% endfor %}
+{% endfor %}
 ```
 
 ## MCP 服务化
@@ -138,9 +183,10 @@ OpsPilot/
 
 业务规则通过 `config/rules.yaml` 配置，包括：
 
-- **优先级 (Priority)**：定义各 Sheet 在 Word 章节中的先后顺序
-- **动作映射 (Mapping)**：定义操作类型对应的详细步骤描述文本
-- **高危操作**：定义需要人工确认的高危操作关键字
+- **渲染策略 (render_config)**：控制渲染模式、模板路径、回退行为
+- **优先级 (priority_rules)**：定义各 Sheet 在 Word 章节中的先后顺序
+- **动作映射 (action_library)**：定义操作类型对应的详细步骤描述文本
+- **高危操作 (high_risk_keywords)**：定义需要人工确认的高危操作关键字
 
 ## 开发指南
 
@@ -160,9 +206,10 @@ pytest tests/
 ### 架构原则（与 `.cursor/rules/architect.mdc` 对齐）
 
 1. **模块化解耦**：坚持将「分析逻辑」与「文档渲染」分离，支持异步人工确认流程
-2. **规则驱动**：所有业务逻辑（排序、映射）必须从 `rules.yaml` 读取，禁止在代码中硬编码
-3. **中间态协议**：解析层与渲染层通过 `report.json` 通信，确保字段能被 LLM 清晰理解
-4. **目录规范**：维护 `src/`、`config/`、`templates/`、`output/` 等目录的整洁与逻辑一致性
+2. **规则驱动**：所有业务逻辑（排序、映射、渲染策略）必须从 `rules.yaml` 读取，禁止在代码中硬编码
+3. **双轨渲染**：支持模板渲染与内置渲染两种模式，配置驱动自动切换与回退
+4. **中间态协议**：解析层与渲染层通过 `report.json` 通信，确保字段能被 LLM 清晰理解
+5. **目录规范**：维护 `src/`、`config/`、`templates/`、`output/` 等目录的整洁与逻辑一致性
 
 ### 项目进度
 
