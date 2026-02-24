@@ -7,8 +7,10 @@ Template Renderer Module
 1. 模板驱动：所有样式定义在 Word 模板中，确保与样板一致
 2. Jinja2 语法：使用 {% for %} 循环和 {{ }} 变量
 3. 防御性编程：处理空数据和缺失字段
+4. 双轨渲染：支持模板渲染与内置渲染两种模式
 """
 
+from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
@@ -18,6 +20,13 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+
+
+class RenderStrategy(Enum):
+    """渲染策略枚举"""
+    AUTO = "auto"
+    TEMPLATE = "template"
+    BUILTIN = "builtin"
 
 
 class TemplateRendererError(Exception):
@@ -37,7 +46,7 @@ class TemplateRenderer:
     职责：
     - 基于 docxtpl 模板引擎渲染 Word 文档
     - 支持 Jinja2 循环和条件语法
-    - 当模板不存在时，使用内置渲染逻辑
+    - 支持三种渲染策略：AUTO、TEMPLATE、BUILTIN
     """
     
     def __init__(self, config_path: str = "config/rules.yaml"):
@@ -50,6 +59,7 @@ class TemplateRenderer:
         self.config_path = Path(config_path)
         self._config: dict = {}
         self._output_config: dict = {}
+        self._render_config: dict = {}
         
         self._load_config()
     
@@ -62,6 +72,7 @@ class TemplateRenderer:
             self._config = yaml.safe_load(f)
         
         self._output_config = self._config.get('output_config', {})
+        self._render_config = self._config.get('render_config', {})
     
     def render(self, report: dict, template_path: str, output_path: str) -> str:
         """
@@ -75,54 +86,135 @@ class TemplateRenderer:
         Returns:
             实际输出的文件路径
         """
+        strategy = self._get_render_strategy()
+        
+        if strategy == RenderStrategy.BUILTIN:
+            return self._render_builtin(report, output_path)
+        
+        if strategy == RenderStrategy.TEMPLATE:
+            return self._render_with_template_strict(report, template_path, output_path)
+        
+        return self._render_auto(report, template_path, output_path)
+    
+    def _get_render_strategy(self) -> RenderStrategy:
+        """获取渲染策略"""
+        strategy_str = self._render_config.get('strategy', 'auto')
+        try:
+            return RenderStrategy(strategy_str)
+        except ValueError:
+            return RenderStrategy.AUTO
+    
+    def _render_auto(self, report: dict, template_path: str, output_path: str) -> str:
+        """AUTO 策略：优先模板，失败回退内置"""
         template_file = Path(template_path)
         
-        # 如果模板存在且是有效的 docxtpl 模板，使用模板渲染
         if template_file.exists() and self._is_docxtpl_template(template_file):
-            return self._render_with_template(report, template_file, output_path)
-        else:
-            # 否则使用内置渲染逻辑
-            return self._render_builtin(report, output_path)
+            try:
+                return self._render_with_template(report, template_file, output_path)
+            except Exception as e:
+                if self._render_config.get('fallback_to_builtin', True):
+                    import warnings
+                    warnings.warn(f"模板渲染失败，回退到内置渲染: {e}")
+                    return self._render_builtin(report, output_path)
+                raise
+        
+        return self._render_builtin(report, output_path)
+    
+    def _render_with_template_strict(
+        self,
+        report: dict,
+        template_path: str,
+        output_path: str
+    ) -> str:
+        """TEMPLATE 策略：严格使用模板，不回退"""
+        template_file = Path(template_path)
+        
+        if not template_file.exists():
+            raise TemplateNotFoundError(f"模板文件不存在: {template_path}")
+        
+        if not self._is_docxtpl_template(template_file):
+            raise TemplateRendererError(
+                f"模板文件不包含 Jinja2 标记，无法用于模板渲染: {template_path}"
+            )
+        
+        return self._render_with_template(report, template_file, output_path)
     
     def _is_docxtpl_template(self, template_path: Path) -> bool:
-        """检查是否是有效的 docxtpl 模板"""
+        """检查是否是有效的 docxtpl 模板
+        
+        仅当文档中实际包含 Jinja2/docxtpl 标记时才视为有效模板，
+        否则回退到内置渲染逻辑，避免误将纯 Word 文档当作模板。
+        """
         try:
             from docxtpl import DocxTemplate
             doc = DocxTemplate(str(template_path))
-            # 检查是否包含 Jinja2 标记
-            return True
+            
+            def _has_jinja(text: Any) -> bool:
+                if not text:
+                    return False
+                s = str(text)
+                return "{{" in s or "{%" in s
+            
+            # 使用 get_docx() 获取 Document 对象（docx 属性在新版本返回 None）
+            docx_doc = doc.get_docx()
+            
+            # 检查段落中的 Jinja2 标记
+            for paragraph in docx_doc.paragraphs:
+                if _has_jinja(paragraph.text):
+                    return True
+            
+            # 检查表格单元格中的 Jinja2 标记
+            for table in docx_doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        if _has_jinja(cell.text):
+                            return True
+            
+            # 未检测到任何 Jinja2 标记，视为非模板文档
+            return False
+        except ImportError:
+            # docxtpl 未安装，回退到内置渲染
+            return False
         except Exception:
+            # 模板解析错误（如 Jinja 语法错误），回退到内置渲染
             return False
     
     def _render_with_template(
-        self, 
-        report: dict, 
-        template_path: Path, 
+        self,
+        report: dict,
+        template_path: Path,
         output_path: str
     ) -> str:
-        """使用 docxtpl 模板渲染"""
+        """使用 docxtpl 模板渲染，失败时回退到内置渲染"""
         try:
             from docxtpl import DocxTemplate
         except ImportError:
             raise TemplateRendererError(
                 "docxtpl 未安装，请运行: pip install docxtpl"
             )
-        
-        doc = DocxTemplate(str(template_path))
-        context = self._prepare_context(report)
-        doc.render(context)
-        
-        output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        doc.save(str(output_file))
-        
-        return str(output_file)
+
+        try:
+            doc = DocxTemplate(str(template_path))
+            context = self._prepare_context(report)
+            doc.render(context)
+
+            output_file = Path(output_path)
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            doc.save(str(output_file))
+
+            return str(output_file)
+        except Exception as e:
+            # 模板渲染失败（如 Jinja2 语法错误），回退到内置渲染
+            import warnings
+            warnings.warn(f"模板渲染失败，回退到内置渲染: {e}")
+            return self._render_builtin(report, output_path)
     
     def _render_builtin(self, report: dict, output_path: str) -> str:
         """
         内置渲染逻辑（兼容 v2.0 数据结构）
         
         使用 python-docx 直接生成文档，无需模板文件
+        输出结构符合 PRD 5. 文档输出规范，包含 5 个部分
         """
         doc = Document()
         self._setup_chinese_font(doc)
@@ -133,6 +225,24 @@ class TemplateRenderer:
         title_text = f"{Path(source_file).stem} - 实施方案"
         self._add_title(doc, title_text)
         
+        # ===== 第1部分：原因和目的 =====
+        doc.add_heading('1 原因和目的', level=1)
+        
+        # 1.1 变更应用
+        doc.add_heading('1.1 变更应用', level=2)
+        app_name = meta.get('application_name', '（待填写）')
+        doc.add_paragraph(app_name)
+        
+        # 1.2 变更原因和目的
+        doc.add_heading('1.2 变更原因和目的', level=2)
+        change_reason = meta.get('change_reason', '（待填写）')
+        doc.add_paragraph(change_reason)
+        
+        # 1.3 变更影响
+        doc.add_heading('1.3 变更影响', level=2)
+        change_impact = meta.get('change_impact', '（待填写）')
+        doc.add_paragraph(change_impact)
+        
         # 渲染摘要
         self._render_summary(doc, report.get('summary', {}))
         
@@ -140,7 +250,7 @@ class TemplateRenderer:
         if report.get('has_risk_alerts', False):
             self._render_risk_alerts(doc, report.get('risk_alerts', []))
         
-        # 渲染第2部分：2 实施步骤和计划
+        # ===== 第2部分：实施步骤和计划 =====
         doc.add_heading('2 实施步骤和计划', level=1)
         impl_summary = report.get('implementation_summary', {})
         if impl_summary.get('has_data', False):
@@ -156,6 +266,18 @@ class TemplateRenderer:
         
         for section in sections_sorted:
             self._render_section(doc, section)
+        
+        # ===== 第3部分：实施后验证计划 =====
+        doc.add_heading('3 实施后验证计划', level=1)
+        doc.add_paragraph('（待填写）')
+        
+        # ===== 第4部分：应急回退措施 =====
+        doc.add_heading('4 应急回退措施', level=1)
+        doc.add_paragraph('（待填写）')
+        
+        # ===== 第5部分：风险分析和规避措施 =====
+        doc.add_heading('5 风险分析和规避措施', level=1)
+        doc.add_paragraph('（待填写）')
         
         # 保存文档
         output_file = Path(output_path)

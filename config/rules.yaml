@@ -29,6 +29,7 @@ implementation_summary:
 # 注意：Sheet 名称必须与 Excel 实际名称完全一致
 priority_rules:
   "上线代码包清单": 10
+  "数据库脚本部署": 15
   "应用配置": 20
   "容器配置": 30
   "MQS配置": 40
@@ -95,6 +96,14 @@ high_risk_keywords:
 # column_mapping: Excel 实际列名 -> 标准列名 的映射（支持别名）
 # 注意：Sheet 名称必须与 Excel 完全一致
 sheet_column_mapping:
+  "数据库脚本部署":
+    columns: ["脚本名称", "执行顺序", "数据库", "执行人", "备注"]
+    column_mapping:
+      脚本名称: ["脚本名称", "任务名", "任务名称", "脚本"]
+      执行顺序: ["执行顺序", "顺序", "序号"]
+      数据库: ["数据库", "目标库", "DB"]
+      执行人: ["执行人", "实施人", "负责人"]
+      备注: ["备注", "说明", "描述"]
   "应用配置":
     columns: ["部署单元", "配置项", "配置值", "实施人", "复核人"]
     column_mapping:
@@ -178,3 +187,13 @@ output_config:
     font_size: 10
     bold: true
     background_color: "#D9E2F3"
+
+# 渲染策略配置
+# strategy: 渲染策略
+#   - auto: 优先使用模板，模板不存在或渲染失败时回退内置渲染
+#   - template: 严格使用模板，失败抛出异常
+#   - builtin: 仅使用内置渲染，忽略模板
+render_config:
+  strategy: "auto"
+  template_path: "templates/template.docx"
+  fallback_to_builtin: true
