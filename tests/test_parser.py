@@ -397,8 +397,8 @@ class TestExcelParserGetColumns:
         parser = ExcelParser(config_path=str(sample_config))
         
         columns = parser.get_columns_for_sheet('数据库脚本部署')
-        assert '任务名' in columns
-        assert '操作类型' in columns
+        assert '脚本名称' in columns
+        assert '执行顺序' in columns
     
     def test_get_columns_for_unknown_sheet(self, sample_config):
         """测试获取未知 Sheet 使用默认列"""

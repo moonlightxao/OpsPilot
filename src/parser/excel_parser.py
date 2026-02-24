@@ -393,6 +393,14 @@ class ExcelParser:
             executor_column = field_mapping.get('executor')
             external_link_column = field_mapping.get('external_link')
             
+            # 获取该章节的列定义（用于 cells 提取）
+            columns, column_mapping = self._get_columns_and_mapping_for_sheet(sheet_name)
+            
+            # 构建 Excel 实际列名 -> 标准列名 的反向映射
+            std_to_excel = self._build_std_to_excel_mapping(
+                df.columns.tolist(), column_mapping, columns
+            )
+            
             # 按 action_type 分组聚合
             # 聚合算法：相同 Sheet 下相同操作类型的任务合并为一组
             action_groups = {}
@@ -421,9 +429,6 @@ class ExcelParser:
                 action_groups[action_type].append(task_data)
             
             # 构建 action_groups 列表
-            # 获取该章节的列定义（用于 cells 提取）
-            columns = self._get_columns_for_sheet(sheet_name)
-            
             formatted_action_groups = []
             for action_type, tasks in action_groups.items():
                 # 从 action_library 获取操作说明
@@ -432,13 +437,14 @@ class ExcelParser:
                 # 判断是否高危操作
                 is_high_risk = self._is_high_risk(action_type)
                 
-                # 将任务数据转换为 cells 数组格式
+                # 将任务数据转换为 cells 数组格式（使用列名映射）
                 formatted_tasks = []
                 for task in tasks:
-                    # 按列顺序提取 cells 数组
-                    cells = self._extract_cells_by_columns(
+                    # 按列顺序提取 cells 数组，支持列名映射
+                    cells = self._extract_cells_by_columns_with_mapping(
                         task.get('raw_data', {}), 
-                        columns
+                        columns,
+                        std_to_excel
                     )
                     formatted_tasks.append({'cells': cells})
                 
@@ -682,6 +688,92 @@ class ExcelParser:
         if sheet_name in self._sheet_column_mapping:
             return self._sheet_column_mapping[sheet_name].get('columns', [])
         return self._default_columns
+    
+    def _get_columns_and_mapping_for_sheet(self, sheet_name: str) -> tuple[list[str], dict]:
+        """
+        获取指定 Sheet 应展示的列名和列名映射
+        
+        Args:
+            sheet_name: Sheet 名称
+            
+        Returns:
+            (列名列表, 列名映射字典)
+        """
+        if sheet_name in self._sheet_column_mapping:
+            config = self._sheet_column_mapping[sheet_name]
+            columns = config.get('columns', [])
+            column_mapping = config.get('column_mapping', {})
+            return columns, column_mapping
+        return self._default_columns, {}
+    
+    def _build_std_to_excel_mapping(
+        self, 
+        excel_columns: list[str], 
+        column_mapping: dict, 
+        std_columns: list[str]
+    ) -> dict[str, Optional[str]]:
+        """
+        构建标准列名 -> Excel 实际列名 的映射
+        
+        Args:
+            excel_columns: Excel 实际列名列表
+            column_mapping: 配置中的列名映射 {标准列: [别名列表]}
+            std_columns: 标准列名列表（定义顺序）
+            
+        Returns:
+            映射字典 {标准列名: Excel实际列名}
+        """
+        std_to_excel: dict[str, Optional[str]] = {}
+        
+        for std_col in std_columns:
+            # 获取该标准列的别名列表
+            aliases = column_mapping.get(std_col, [std_col])
+            if isinstance(aliases, str):
+                aliases = [aliases]
+            
+            # 在 Excel 列中查找匹配
+            found = None
+            for excel_col in excel_columns:
+                excel_col_norm = str(excel_col).strip()
+                for alias in aliases:
+                    if str(alias).strip() == excel_col_norm:
+                        found = excel_col
+                        break
+                if found:
+                    break
+            
+            std_to_excel[std_col] = found
+        
+        return std_to_excel
+    
+    def _extract_cells_by_columns_with_mapping(
+        self, 
+        raw_data: dict, 
+        columns: list[str],
+        std_to_excel: dict[str, Optional[str]]
+    ) -> list[str]:
+        """
+        从原始数据中按列顺序提取单元格值（支持列名映射）
+        
+        Args:
+            raw_data: 原始行数据字典 {列名: 值}
+            columns: 标准列名列表（定义顺序）
+            std_to_excel: 标准列名 -> Excel 实际列名 映射
+            
+        Returns:
+            按列顺序排列的单元格值列表
+        """
+        cells = []
+        for std_col in columns:
+            # 先通过映射找 Excel 实际列名
+            excel_col = std_to_excel.get(std_col)
+            if excel_col and excel_col in raw_data:
+                value = raw_data.get(excel_col, '')
+            else:
+                # 映射失败，尝试直接用标准列名查找（兼容旧行为）
+                value = raw_data.get(std_col, '')
+            cells.append(str(value) if value else '')
+        return cells
     
     def get_columns_for_sheet(self, sheet_name: str) -> list[str]:
         """
