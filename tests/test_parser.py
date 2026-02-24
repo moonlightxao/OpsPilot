@@ -72,7 +72,7 @@ class TestExcelParserParse:
         # 验证 Section 名称
         section_names = [s['section_name'] for s in result['sections']]
         assert '数据库脚本部署' in section_names
-        assert '上线代码包' in section_names
+        assert '上线代码包清单' in section_names
     
     def test_parse_task_count(self, sample_config, sample_excel):
         """测试任务计数正确"""
@@ -381,12 +381,12 @@ class TestExcelParserGetSheets:
         
         # 验证返回的 sheets
         assert '数据库脚本部署' in sheets
-        assert '上线代码包' in sheets
+        assert '上线代码包清单' in sheets
         assert '应用配置' in sheets
         
-        # 验证顺序：数据库脚本部署(10) < 上线代码包(15) < 应用配置(20)
-        assert sheets.index('数据库脚本部署') < sheets.index('上线代码包')
-        assert sheets.index('上线代码包') < sheets.index('应用配置')
+        # 验证顺序：数据库脚本部署(10) < 上线代码包清单(15) < 应用配置(20)
+        assert sheets.index('数据库脚本部署') < sheets.index('上线代码包清单')
+        assert sheets.index('上线代码包清单') < sheets.index('应用配置')
 
 
 class TestExcelParserGetColumns:

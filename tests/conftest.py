@@ -39,7 +39,7 @@ def sample_config(temp_dir):
         },
         'priority_rules': {
             "数据库脚本部署": 10,
-            "上线代码包": 15,
+            "上线代码包清单": 15,
             "应用配置": 20,
         },
         'action_library': {
@@ -76,13 +76,13 @@ def sample_config(temp_dir):
                     "备注": ["备注", "说明"]
                 }
             },
-            "上线代码包": {
-                'columns': ["应用名称", "版本号", "部署环境", "执行人", "备注"],
+            "上线代码包清单": {
+                'columns': ["包名", "包类型", "部署资源", "实施人", "备注"],
                 'column_mapping': {
-                    "应用名称": ["应用名称", "应用名", "服务名"],
-                    "版本号": ["版本号", "版本"],
-                    "部署环境": ["部署环境", "环境"],
-                    "执行人": ["执行人", "负责人"],
+                    "包名": ["包名", "文件名", "名称"],
+                    "包类型": ["包类型", "类型", "分类"],
+                    "部署资源": ["部署资源名", "资源", "目标"],
+                    "实施人": ["实施人", "执行人", "负责人"],
                     "备注": ["备注", "说明"]
                 }
             },
@@ -160,14 +160,14 @@ def sample_excel(temp_dir):
         '备注': ['初始化脚本', '性能优化', '清理废弃数据']
     })
 
-    # Sheet 3: 上线代码包
+    # Sheet 3: 上线代码包清单（与 rules.yaml 配置一致）
     df2 = pd.DataFrame({
-        '任务名称': ['部署服务A', '升级服务B'],
-        '操作': ['部署', '升级'],
-        '应用名称': ['service-a', 'service-b'],
-        '版本号': ['v1.0.0', 'v2.0.0'],
-        '部署环境': ['prod', 'prod'],
-        '执行人': ['张三', '李四'],
+        '任务名': ['部署服务A', '升级服务B'],
+        '操作类型': ['部署', '升级'],
+        '包名': ['service-a-v1.0.0.jar', 'service-b-v2.0.0.jar'],
+        '包类型': ['JAR', 'JAR'],
+        '部署资源名': ['server-01', 'server-02'],
+        '实施人': ['张三', '李四'],
         '备注': ['新服务', '版本升级']
     })
 
@@ -175,7 +175,7 @@ def sample_excel(temp_dir):
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
         df0.to_excel(writer, sheet_name='上线安排', index=False)
         df1.to_excel(writer, sheet_name='数据库脚本部署', index=False)
-        df2.to_excel(writer, sheet_name='上线代码包', index=False)
+        df2.to_excel(writer, sheet_name='上线代码包清单', index=False)
 
     return excel_path
 

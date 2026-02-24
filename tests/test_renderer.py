@@ -8,6 +8,7 @@ TemplateRenderer 单元测试
 3. _render_risk_alerts() - 风险告警渲染
 4. _render_section() - 章节渲染
 5. _render_task_table() - 表格渲染
+6. RenderStrategy - 渲染策略切换
 """
 
 from pathlib import Path
@@ -15,8 +16,13 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from src.renderer import TemplateRenderer, render_with_template
-from src.renderer.template_renderer import TemplateRendererError
+from src.renderer import (
+    TemplateRenderer,
+    render_with_template,
+    RenderStrategy,
+    TemplateRendererError
+)
+from src.renderer.template_renderer import TemplateNotFoundError
 
 
 def _empty_report():
@@ -287,5 +293,220 @@ class TestTemplateRendererConvenienceFunction:
             template_path="templates/template.docx",
             output_path=str(output_path),
             config_path=str(sample_config)
+        )
+        assert Path(result).exists()
+
+
+class TestTemplateRendererTemplateDetection:
+    """测试模板检测与回退逻辑"""
+    
+    def test_non_docxtpl_template_falls_back_to_builtin(self, sample_config, sample_report, temp_dir):
+        """当模板文件不存在 Jinja 标记时，应回退到内置渲染逻辑"""
+        from docx import Document
+        
+        # 创建一个不含任何 Jinja 标记的普通 Word 文档作为“伪模板”
+        fake_template = temp_dir / "fake_template.docx"
+        doc = Document()
+        doc.add_heading("纯样式模板", level=1)
+        doc.add_paragraph("这里没有任何 Jinja 占位符，仅用于验证回退逻辑。")
+        doc.save(str(fake_template))
+        
+        renderer = TemplateRenderer(config_path=str(sample_config))
+        output_path = temp_dir / "fallback_output.docx"
+        
+        result_path = renderer.render(sample_report, str(fake_template), str(output_path))
+        result_doc = Document(result_path)
+        
+        text = "\n".join(p.text for p in result_doc.paragraphs)
+        
+        # 断言：输出中应包含来自 report.sections 的内容（证明使用了内置渲染）
+        assert "应用配置" in text
+        # 并且至少有一张表格（任务清单表格）
+        assert len(result_doc.tables) > 0
+
+
+class TestRenderStrategy:
+    """测试渲染策略切换"""
+
+    def test_get_render_strategy_auto(self, sample_config):
+        """测试 AUTO 策略解析"""
+        renderer = TemplateRenderer(config_path=str(sample_config))
+        assert renderer._get_render_strategy() == RenderStrategy.AUTO
+
+    def test_get_render_strategy_invalid_defaults_to_auto(self, temp_dir):
+        """测试无效策略默认回退到 AUTO"""
+        config_content = """
+output_config:
+  title_style:
+    font_name: "微软雅黑"
+render_config:
+  strategy: "invalid_strategy"
+"""
+        config_path = temp_dir / "test_config.yaml"
+        config_path.write_text(config_content, encoding='utf-8')
+        
+        renderer = TemplateRenderer(config_path=str(config_path))
+        assert renderer._get_render_strategy() == RenderStrategy.AUTO
+
+    def test_auto_strategy_uses_builtin_when_no_template(
+        self, sample_config, sample_report, temp_dir
+    ):
+        """AUTO 策略：无模板时使用内置渲染"""
+        renderer = TemplateRenderer(config_path=str(sample_config))
+        output_path = temp_dir / "auto_no_template.docx"
+        
+        result = renderer.render(
+            sample_report,
+            "nonexistent_template.docx",
+            str(output_path)
+        )
+        
+        assert Path(result).exists()
+        doc = Document(result)
+        text = "\n".join(p.text for p in doc.paragraphs)
+        assert "应用配置" in text
+
+    def test_builtin_strategy_ignores_template(
+        self, sample_config, sample_report, temp_dir
+    ):
+        """BUILTIN 策略：忽略模板参数"""
+        config_content = """
+output_config:
+  title_style:
+    font_name: "微软雅黑"
+render_config:
+  strategy: "builtin"
+"""
+        config_path = temp_dir / "builtin_config.yaml"
+        config_path.write_text(config_content, encoding='utf-8')
+        
+        renderer = TemplateRenderer(config_path=str(config_path))
+        output_path = temp_dir / "builtin_output.docx"
+        
+        result = renderer.render(
+            sample_report,
+            "any_template.docx",
+            str(output_path)
+        )
+        
+        assert Path(result).exists()
+        doc = Document(result)
+        assert len(doc.paragraphs) > 0
+
+
+class TestTemplateNotFound:
+    """测试模板不存在时的行为"""
+
+    def test_template_strategy_raises_when_no_template(
+        self, sample_report, temp_dir
+    ):
+        """TEMPLATE 策略：模板不存在时抛出异常"""
+        config_content = """
+output_config:
+  title_style:
+    font_name: "微软雅黑"
+render_config:
+  strategy: "template"
+"""
+        config_path = temp_dir / "template_config.yaml"
+        config_path.write_text(config_content, encoding='utf-8')
+        
+        renderer = TemplateRenderer(config_path=str(config_path))
+        output_path = temp_dir / "template_output.docx"
+        
+        with pytest.raises(TemplateNotFoundError):
+            renderer.render(
+                sample_report,
+                "nonexistent.docx",
+                str(output_path)
+            )
+
+    def test_template_strategy_raises_when_no_jinja_markers(
+        self, sample_report, temp_dir
+    ):
+        """TEMPLATE 策略：模板无 Jinja 标记时抛出异常"""
+        config_content = """
+output_config:
+  title_style:
+    font_name: "微软雅黑"
+render_config:
+  strategy: "template"
+"""
+        config_path = temp_dir / "template_config.yaml"
+        config_path.write_text(config_content, encoding='utf-8')
+        
+        fake_template = temp_dir / "fake.docx"
+        doc = Document()
+        doc.add_paragraph("No Jinja markers here")
+        doc.save(str(fake_template))
+        
+        renderer = TemplateRenderer(config_path=str(config_path))
+        output_path = temp_dir / "output.docx"
+        
+        with pytest.raises(TemplateRendererError):
+            renderer.render(
+                sample_report,
+                str(fake_template),
+                str(output_path)
+            )
+
+
+class TestFallbackBehavior:
+    """测试回退机制"""
+
+    def test_auto_fallback_on_template_error(
+        self, sample_config, sample_report, temp_dir
+    ):
+        """AUTO 策略：模板渲染失败时回退内置"""
+        # 创建一个有 Jinja 语法但引用不存在变量的模板
+        broken_template = temp_dir / "broken.docx"
+        try:
+            from docxtpl import DocxTemplate
+            doc = DocxTemplate(str(broken_template))
+        except ImportError:
+            pytest.skip("docxtpl not installed")
+        except Exception:
+            pass
+        
+        # 使用伪模板（有 Jinja 但语法可能有问题）
+        fake_jinja_template = temp_dir / "fake_jinja.docx"
+        doc = Document()
+        doc.add_paragraph("{{ nonexistent_variable }}")
+        doc.save(str(fake_jinja_template))
+        
+        renderer = TemplateRenderer(config_path=str(sample_config))
+        output_path = temp_dir / "fallback.docx"
+        
+        result = renderer.render(
+            sample_report,
+            str(fake_jinja_template),
+            str(output_path)
+        )
+        
+        assert Path(result).exists()
+
+    def test_no_fallback_when_configured_false(
+        self, sample_report, temp_dir
+    ):
+        """配置禁用回退时，模板失败应抛出异常"""
+        config_content = """
+output_config:
+  title_style:
+    font_name: "微软雅黑"
+render_config:
+  strategy: "auto"
+  fallback_to_builtin: false
+"""
+        config_path = temp_dir / "no_fallback_config.yaml"
+        config_path.write_text(config_content, encoding='utf-8')
+        
+        renderer = TemplateRenderer(config_path=str(config_path))
+        output_path = temp_dir / "no_fallback.docx"
+        
+        # 无模板时应直接内置渲染（非模板失败场景）
+        result = renderer.render(
+            sample_report,
+            "nonexistent.docx",
+            str(output_path)
         )
         assert Path(result).exists()

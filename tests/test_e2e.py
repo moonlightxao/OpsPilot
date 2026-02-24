@@ -144,15 +144,15 @@ class TestEndToEnd:
         parser = ExcelParser(config_path=str(sample_config))
         report = parser.parse(str(sample_excel))
         
-        # 验证任务数量
-        assert report['summary']['total_tasks'] == 5  # 3 + 2
+        # 验证任务数量（Sheet 2 数据库脚本部署 3 + Sheet 3 上线代码包清单 2）
+        assert report['summary']['total_tasks'] == 5
         
         # 收集所有任务名（v2.0 协议：从 cells 数组中提取）
         excel_tasks = set()
         for section in report['sections']:
             for group in section['action_groups']:
                 for task in group['tasks']:
-                    # v2.0 协议：cells 数组的第一个元素通常是任务名
+                    # v2.0 协议：cells 数组的第一个元素通常是任务名或主要标识
                     cells = task.get('cells', [])
                     if cells:
                         excel_tasks.add(cells[0])
@@ -160,8 +160,9 @@ class TestEndToEnd:
         assert '创建用户表' in excel_tasks
         assert '添加索引' in excel_tasks
         assert '删除临时表' in excel_tasks
-        assert '部署服务A' in excel_tasks
-        assert '升级服务B' in excel_tasks
+        # 上线代码包清单的 cells[0] 是包名
+        assert 'service-a-v1.0.0.jar' in excel_tasks
+        assert 'service-b-v2.0.0.jar' in excel_tasks
         
         # 生成 Word
         output_docx = temp_dir / "integrity_test.docx"
