@@ -1,8 +1,9 @@
-# report.json 数据协议规范 (v2.0 - 模板驱动版)
+# report.json 数据协议规范 (v2.1 - 输出与样例对齐)
 
 ## 概述
 `report.json` 是解析层（Parser）与渲染层（Renderer）之间的中间态数据结构。
 **v2.0 变更**：适配 `docxtpl` 模板引擎，结构设计支持 Jinja2 `{% for %}` 循环。
+**v2.1 变更**：新增 `implementation_summary` 字段，支持第2章「实施总表」独立输出。
 
 ## 设计原则（docxtpl 适配）
 
@@ -35,6 +36,14 @@
       "task_names": ["string - 涉及的任务名列表"]
     }
   ],
+  "implementation_summary": {
+    "sheet_name": "string - 源 Sheet 名称",
+    "columns": ["string - 表头列名"],
+    "rows": [
+      { "cells": ["string - 按列顺序的单元格值"] }
+    ],
+    "has_data": "boolean - 是否有数据"
+  },
   "sections": [
     {
       "section_name": "string - 章节/Sheet 名称",
@@ -171,6 +180,21 @@
 }
 ```
 
+## v2.0 → v2.1 变更说明
+
+| 变更项 | v2.0 | v2.1 | 原因 |
+|--------|------|------|------|
+| 实施总表 | 无 | `implementation_summary` | PRD 要求 Sheet 1 作为第2章主体表格输出 |
+
+## v2.1 实施总表列规范（2026-02-23 修订）
+
+与 `实施文档.docx` 样例一致，`implementation_summary.columns` 固定为 6 列（顺序不可变）：
+`序号` | `任务` | `开始时间` | `结束时间` | `实施人` | `复核人`
+
+- **日期列**：`开始时间`、`结束时间` 须为可读格式 `YYYY-MM-DD`，Parser 负责将 Excel 序列号（如 46315）转换
+- **未命名列**：Parser 须过滤 `Unnamed`、空列名，不输出
+- **列映射**：由 rules.yaml `implementation_summary.column_mapping` 驱动
+
 ## v1.0 → v2.0 变更说明
 
 | 变更项 | v1.0 | v2.0 | 原因 |
@@ -184,7 +208,11 @@
 
 | 字段路径 | 必填 | 说明 |
 |----------|------|------|
-| `meta.version` | Y | 协议版本，当前为 "2.0" |
+| `meta.version` | Y | 协议版本，当前为 "2.0" 或 "2.1" |
+| `implementation_summary.sheet_name` | Y | 实施总表源 Sheet 名称 |
+| `implementation_summary.columns` | Y | 实施总表表头 |
+| `implementation_summary.rows` | Y | 实施总表数据行 |
+| `implementation_summary.has_data` | Y | 是否有实施总表数据，用于模板条件渲染 |
 | `summary.has_external_links` | Y | 用于模板条件渲染外部链接区块 |
 | `has_risk_alerts` | Y | 用于模板条件渲染风险告警区块 |
 | `sections[].columns` | Y | 该章节表格的列名，用于表头渲染 |

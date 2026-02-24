@@ -51,6 +51,16 @@ def create_template():
 
     doc.add_paragraph()  # 空行
 
+    # ========== 第1部分：1 原因和目的 ==========
+    doc.add_heading('1 原因和目的', level=1)
+    doc.add_heading('1.1 变更应用', level=2)
+    doc.add_paragraph('{{ meta.application_name|default("（待填写）") }}')
+    doc.add_heading('1.2 变更原因和目的', level=2)
+    doc.add_paragraph('{{ meta.change_reason|default("（待填写）") }}')
+    doc.add_heading('1.3 变更影响', level=2)
+    doc.add_paragraph('{{ meta.change_impact|default("（待填写）") }}')
+    doc.add_paragraph()  # 空行
+
     # ========== 摘要信息 ==========
     summary_heading = doc.add_paragraph()
     run = summary_heading.add_run('【摘要信息】')
@@ -103,17 +113,17 @@ def create_template():
 
     doc.add_paragraph()  # 空行
 
-    # ========== 2.1 实施总表（条件渲染） ==========
-    # 实施总表表格：预定义最大 8 列，表头与数据行使用 Jinja2 循环
+    # ========== 第2部分：2 实施步骤和计划 ==========
+    doc.add_heading('2 实施步骤和计划', level=1)
+
+    # 实施总表（无 2.x 编号，固定 6 列：序号|任务|开始时间|结束时间|实施人|复核人）
     impl_start = doc.add_paragraph()
     impl_start.add_run('{%p if implementation_summary.has_data %}')
-    impl_heading = doc.add_heading('2.1 实施总表', level=1)
-    # 表格：8 列（与常见上线安排列数匹配），动态填充
-    impl_table = doc.add_table(rows=2, cols=8)
+    impl_table = doc.add_table(rows=2, cols=6)
     impl_table.style = 'Table Grid'
     impl_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     header_cells = impl_table.rows[0].cells
-    for i in range(8):
+    for i in range(6):
         cell = header_cells[i]
         cell.text = '{%tc if implementation_summary.columns[' + str(i) + '] %}{{ implementation_summary.columns[' + str(i) + '] }}{%tc endif %}'
         for paragraph in cell.paragraphs:
@@ -124,9 +134,9 @@ def create_template():
         set_cell_shading(cell, 'D9E2F3')
     data_cells = impl_table.rows[1].cells
     data_cells[0].text = '{%tr for row in implementation_summary.rows %}{{ row.cells[0] }}'
-    for i in range(1, 7):
+    for i in range(1, 5):
         data_cells[i].text = '{{ row.cells[' + str(i) + '] }}'
-    data_cells[7].text = '{{ row.cells[7] }}{%tr endfor %}'
+    data_cells[5].text = '{{ row.cells[5] }}{%tr endfor %}'
     for cell in data_cells:
         for paragraph in cell.paragraphs:
             for run in paragraph.runs:
@@ -136,13 +146,15 @@ def create_template():
 
     doc.add_paragraph()  # 空行
 
-    # ========== 2.2 详细步骤 - 章节循环 ==========
-    # 使用 {%p for section in sections %} 进行段落级循环
+    # 2.1 详细实施步骤
+    doc.add_heading('2.1 详细实施步骤', level=2)
+
+    # 2.1.1、2.1.2... 各 section
     p_section_start = doc.add_paragraph()
     p_section_start.add_run('{%p for section in sections %}')
 
-    # 章节标题（二级标题）
-    section_title = doc.add_heading('{{ section.section_name }}', level=1)
+    # 章节标题：2.1.{{ loop.index }} {{ section.section_name }}
+    section_title = doc.add_heading('2.1.{{ loop.index }} {{ section.section_name }}', level=3)
 
     # 操作组循环
     p_action_start = doc.add_paragraph()
@@ -206,6 +218,22 @@ def create_template():
     # 章节循环结束
     p_section_end = doc.add_paragraph()
     p_section_end.add_run('{%p endfor %}')
+
+    doc.add_paragraph()  # 空行
+
+    # ========== 第3部分：3 实施后验证计划 ==========
+    doc.add_heading('3 实施后验证计划', level=1)
+    doc.add_paragraph('（待填写）')
+    doc.add_paragraph()
+
+    # ========== 第4部分：4 应急回退措施 ==========
+    doc.add_heading('4 应急回退措施', level=1)
+    doc.add_paragraph('（待填写）')
+    doc.add_paragraph()
+
+    # ========== 第5部分：5 风险分析和规避措施 ==========
+    doc.add_heading('5 风险分析和规避措施', level=1)
+    doc.add_paragraph('（待填写）')
 
     # 保存模板
     output_path = Path('d:/code/OpsPilot/templates/template.docx')

@@ -25,7 +25,17 @@ def sample_config(temp_dir):
         'implementation_summary': {
             'strategy': 'first_sheet',
             'sheet_names': ['上线安排', '实施总表'],
-            'columns': None,
+            'output_columns': ['序号', '任务', '开始时间', '结束时间', '实施人', '复核人'],
+            'column_mapping': {
+                '任务': ['任务名', '任务名称', '任务', 'Task'],
+                '开始时间': ['开始时间', '开始日期', '计划开始'],
+                '结束时间': ['结束时间', '结束日期', '计划结束'],
+                '实施人': ['实施人', '执行人', '负责人'],
+                '复核人': ['复核人', '复核', '审核人'],
+            },
+            'date_columns': ['开始时间', '结束时间'],
+            'auto_sequence': True,
+            'drop_unnamed_columns': True,
         },
         'priority_rules': {
             "数据库脚本部署": 10,
@@ -184,6 +194,31 @@ def empty_excel(temp_dir):
     excel_path = temp_dir / "test_empty.xlsx"
     with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name='空Sheet', index=False)
+    return excel_path
+
+
+@pytest.fixture
+def excel_impl_summary_with_dates_and_unnamed(temp_dir):
+    """实施总表含 Excel 日期序列号和 Unnamed 列，用于测试列映射与日期转换"""
+    # 46315 ≈ 2026-10-14, 46316 ≈ 2026-10-15
+    df0 = pd.DataFrame({
+        '任务': ['任务A', '任务B'],
+        'Unnamed: 1': ['应过滤', '应过滤'],
+        '开始时间': [46315, 46316],
+        '结束时间': [46316, 46317],
+        '实施人': ['张三', '李四'],
+        '复核人': ['王五', '赵六'],
+    })
+    df1 = pd.DataFrame({
+        '任务名': ['脚本1'],
+        '操作类型': ['新增'],
+        '执行人': ['张三'],
+        '备注': [''],
+    })
+    excel_path = temp_dir / "test_impl_dates.xlsx"
+    with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+        df0.to_excel(writer, sheet_name='上线安排', index=False)
+        df1.to_excel(writer, sheet_name='数据库脚本部署', index=False)
     return excel_path
 
 

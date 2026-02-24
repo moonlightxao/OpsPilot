@@ -90,8 +90,11 @@ class TestTemplateRendererRender:
             'has_risk_alerts': False, 'risk_alerts': [],
             'implementation_summary': {
                 'sheet_name': '上线安排',
-                'columns': ['阶段', '任务', '负责人'],
-                'rows': [{'cells': ['准备', '环境检查', '张三']}, {'cells': ['部署', '脚本执行', '李四']}],
+                'columns': ['序号', '任务', '开始时间', '结束时间', '实施人', '复核人'],
+                'rows': [
+                    {'cells': ['1', '环境检查', '', '', '张三', '']},
+                    {'cells': ['2', '脚本执行', '', '', '李四', '']},
+                ],
                 'has_data': True,
             },
             'sections': [],
@@ -101,7 +104,7 @@ class TestTemplateRendererRender:
         _render(renderer, report_with_impl, output_path)
         doc = Document(str(output_path))
         text = '\n'.join([p.text for p in doc.paragraphs])
-        assert '2.1 实施总表' in text
+        assert '2 实施步骤和计划' in text
         assert len(doc.tables) >= 1
 
     def test_render_document_structure(self, sample_config, sample_report, temp_dir):

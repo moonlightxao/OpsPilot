@@ -140,17 +140,17 @@ class TemplateRenderer:
         if report.get('has_risk_alerts', False):
             self._render_risk_alerts(doc, report.get('risk_alerts', []))
         
-        # 渲染实施总表（第2章主体表格）
+        # 渲染第2部分：2 实施步骤和计划
+        doc.add_heading('2 实施步骤和计划', level=1)
         impl_summary = report.get('implementation_summary', {})
         if impl_summary.get('has_data', False):
-            doc.add_heading('2.1 实施总表', level=1)
             self._render_implementation_summary_table(
                 doc, impl_summary.get('columns', []), impl_summary.get('rows', [])
             )
             doc.add_paragraph()
         
-        # 渲染章节（详细步骤）
-        doc.add_heading('2.2 详细步骤', level=1)
+        # 2.1 详细实施步骤
+        doc.add_heading('2.1 详细实施步骤', level=2)
         sections = report.get('sections', [])
         sections_sorted = sorted(sections, key=lambda x: x.get('priority', 999))
         
@@ -174,18 +174,25 @@ class TemplateRenderer:
                 'rows': [],
                 'has_data': False
             }
-        # 为 docxtpl 模板填充：预定义最大 8 列，避免表格访问越界
+        # 为 docxtpl 模板填充：实施总表固定 6 列
         if impl_summary.get('has_data'):
             cols = impl_summary.get('columns', [])
             impl_summary = dict(impl_summary)
-            impl_summary['columns'] = list(cols) + [''] * max(0, 8 - len(cols))
+            impl_summary['columns'] = list(cols) + [''] * max(0, 6 - len(cols))
             padded_rows = []
             for row in impl_summary.get('rows', []):
                 cells = list(row.get('cells', []))
-                padded_rows.append({'cells': cells + [''] * max(0, 8 - len(cells))})
+                padded_rows.append({'cells': cells + [''] * max(0, 6 - len(cells))})
             impl_summary['rows'] = padded_rows
+        meta = dict(report.get('meta', {}))
+        meta.setdefault('application_name', '')
+        meta.setdefault('change_reason', '')
+        meta.setdefault('change_impact', '')
+        source_file = meta.get('source_file', '实施文档')
+        title = f"{Path(source_file).stem} - 实施方案"
         return {
-            'meta': report.get('meta', {}),
+            'title': title,
+            'meta': meta,
             'summary': report.get('summary', {}),
             'has_risk_alerts': report.get('has_risk_alerts', False),
             'risk_alerts': report.get('risk_alerts', []),

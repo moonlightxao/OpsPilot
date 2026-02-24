@@ -17,7 +17,8 @@ from src.parser import ExcelParser
 from src.parser.excel_parser import (
     RequiredFieldMissingError,
     SheetNotFoundError,
-    ExcelParserError
+    ExcelParserError,
+    _excel_serial_to_date,
 )
 
 
@@ -98,16 +99,45 @@ class TestExcelParserParse:
             parser.parse(str(temp_dir / "not_exist.xlsx"))
     
     def test_implementation_summary_from_first_sheet(self, sample_config, sample_excel):
-        """测试第一个 Sheet 解析为 implementation_summary"""
+        """测试第一个 Sheet 解析为 implementation_summary（6 列映射、序号自动生成）"""
         parser = ExcelParser(config_path=str(sample_config))
         result = parser.parse(str(sample_excel))
 
         impl = result.get('implementation_summary', {})
         assert impl.get('has_data') is True
         assert impl.get('sheet_name') == '上线安排'
-        assert 'columns' in impl
+        assert impl.get('columns') == ['序号', '任务', '开始时间', '结束时间', '实施人', '复核人']
         assert 'rows' in impl
         assert len(impl['rows']) >= 1
+        # 序号列应自动生成
+        first_row = impl['rows'][0]
+        assert first_row.get('cells', [])[0] == '1'
+
+    def test_implementation_summary_unnamed_filtered_and_dates_converted(
+        self, sample_config, excel_impl_summary_with_dates_and_unnamed
+    ):
+        """测试实施总表：过滤 Unnamed 列、Excel 日期序列号转 YYYY-MM-DD"""
+        parser = ExcelParser(config_path=str(sample_config))
+        result = parser.parse(str(excel_impl_summary_with_dates_and_unnamed))
+
+        impl = result.get('implementation_summary', {})
+        assert impl.get('has_data') is True
+        assert 'Unnamed' not in str(impl.get('columns', []))
+        rows = impl.get('rows', [])
+        assert len(rows) >= 1
+        cells = rows[0].get('cells', [])
+        # 开始时间、结束时间应为 YYYY-MM-DD 格式
+        # 46315 -> 2026-10-14, 46316 -> 2026-10-15
+        assert cells[2].startswith('2026-')  # 开始时间
+        assert cells[3].startswith('2026-')  # 结束时间
+
+    def test_excel_serial_to_date(self):
+        """测试 Excel 日期序列号转 YYYY-MM-DD"""
+        assert _excel_serial_to_date(44927) == '2023-01-01'
+        assert _excel_serial_to_date(46315) == '2026-10-20'  # 1899-12-30 + 46315 天
+        assert _excel_serial_to_date(1) == '1899-12-31'
+        assert _excel_serial_to_date(None) == ''
+        assert _excel_serial_to_date('2024-01-01') == '2024-01-01'
 
     def test_parse_empty_excel(self, sample_config, empty_excel):
         """测试解析空 Excel 文件"""
