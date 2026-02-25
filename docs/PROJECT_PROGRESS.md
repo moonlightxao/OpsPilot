@@ -147,6 +147,21 @@ fastmcp>=0.1.0
 - [x] **Tool: opspilot_run**：实现完整流程的 MCP Tool ✅ 2026-02-22
 - [x] **MCP 启动入口**：支持 `python -m src.mcp.server` 启动 ✅ 2026-02-22
 
+### 2.7 Web 配置中心 (Owner: Developer) 🆕
+- [ ] **W1.1 基础框架**：创建 `src/web/` 目录结构、Flask 应用工厂
+- [ ] **W1.2 配置服务**：实现 ConfigService YAML 读写服务
+- [ ] **W1.3 备份服务**：实现 BackupService 备份管理服务（最多 10 条）
+- [ ] **W1.4 CLI 扩展**：`main.py` 添加 `web` 命令，支持 `python main.py web`
+- [ ] **W2.1 页面模板**：实现基础页面模板（base.html, index.html）
+- [ ] **W2.2 章节排序**：实现章节排序配置页面（拖拽排序）
+- [ ] **W2.3 操作类型**：实现操作类型配置页面（富文本 + 图片上传）
+- [ ] **W2.4 列映射**：实现列映射配置页面（手动输入 + Excel 辅助）
+- [ ] **W2.5 图片上传**：实现图片上传 API，保存至 `config/images/`
+- [ ] **W3.1 配置保存**：实现配置保存与自动备份逻辑
+- [ ] **W3.2 版本回滚**：实现版本回滚功能（二次确认）
+- [ ] **W3.3 YAML 预览**：实现 YAML 格式预览功能
+- [ ] **W3.4 表单校验**：实现表单校验与 Toast 提示
+
 ### 3. 质量保障 (Owner: Tester)
 - [x] **单元测试**：Parser 30/30 通过，Renderer 22/22 全部通过 ✅ 2026-02-18
 - [x] **边界测试**：空文件、缺失字段、非法字符处理已覆盖 ✅ 2026-02-18
@@ -157,6 +172,8 @@ fastmcp>=0.1.0
 - [x] **v2.0 协议适配**：测试用例已更新适配 cells 数组格式 ✅ 2026-02-22
 - [x] **MCP 集成测试**：测试用例已创建（需安装 fastmcp 依赖后运行） ✅ 2026-02-22
 - [x] **黄金样本测试**：使用 上线checklist.xlsx + 实施文档.docx 端到端验证，2/2 通过 ✅ 2026-02-23
+- [ ] **Web API 测试**：API 单元测试（待 Developer 完成 W1 阶段）
+- [ ] **Web E2E 测试**：端到端测试，验收 PRD 6.2 节全部通过
 
 ---
 
@@ -214,6 +231,7 @@ fastmcp>=0.1.0
 - **2026-02-23 [PM]** 需求与缺陷单验收：依据 PRD 第 6 节及 QA_DEFECT_REPORT 回归结论逐项核查；缺陷 #1、#2 验收通过；M3 成果对齐 验收通过；第1/3～5 部分列为遗留项 | 更新 PROJECT_PROGRESS 验收结论
 - **2026-02-25 [PM]** 需求细化：用户反馈 YAML 配置不直观，细化「Web 配置中心」需求 | 更新 OpsPilot_PRD.md 3.4 节
 - **2026-02-25 [PM]** 需求移交：Web 配置中心需求细化完成，待 Architect 进行技术方案设计 | 产出物：OpsPilot_PRD.md 3.4 节、6.2 节
+- **2026-02-25 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_WEB_CONFIG.md`，定义技术选型、目录结构、API 设计、任务拆解 | 产出物：TECH_DESIGN_WEB_CONFIG.md
 
 ---
 
@@ -233,6 +251,8 @@ fastmcp>=0.1.0
 │                  templates/template.docx (Jinja2 模板)                  │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                      config/rules.yaml (规则库)                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                    src/web/ (Web 配置中心) 🆕 待开发                    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -264,7 +284,7 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 - [x] **M3**: 产出第一份完全符合样式的 Word 实施方案（成果对齐）✅ 2026-02-23 PM 验收：缺陷 #1 #2 已修复，核心验收通过
 - [x] **M4**: 模板填充方案验证通过（架构升级）✅ 2026-02-22
 - [x] **M5**: MCP 服务上线，外部 Agent 可调用（服务化）✅ 2026-02-22
-- [ ] **M6**: Web 配置中心上线，运维人员可通过可视化界面管理规则配置
+- [ ] **M6**: Web 配置中心上线，运维人员可通过可视化界面管理规则配置 ⏳ 技术方案已产出
 
 ---
 
@@ -296,25 +316,31 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 
 ## 📣 下一步指派
 
-**项目状态**: ✅ 缺陷 #1、#2 已修复，PM 验收通过。第1/3～5 部分为遗留项，可延后迭代。
+**项目状态**: 🟡 Web 配置中心技术方案已产出，待 Developer 实现
 
 ### 致 Architect
-**已完成**：技术方案 v2、缺陷分析、rules 补充。
+**已完成** ✅ 2026-02-25
+- **技术方案设计**：产出 `docs/TECH_DESIGN_WEB_CONFIG.md`
+- **任务拆解**：14 项开发任务已列入 2.7 节
+- **架构扩展**：新增 `src/web/` 模块定义
 
 ### 致 Developer
-**已完成** ✅ 2026-02-23
-- **缺陷 #1**：Parser 已增加 `_is_excel_serial_column` 过滤 46315 等日期序列号列；序号列映射使用 column_mapping 支持「任务序号」→「序号」
-- **缺陷 #2**：template.docx 已按 create_template.py 重新生成，结构为 2.1 详细实施步骤 + 2.1.1～2.1.N 子节
+**待执行 P0** (M6 里程碑)
+1. **W1 阶段（基础框架）**：
+   - 创建 `src/web/` 目录结构
+   - 实现 Flask 应用工厂
+   - 实现 ConfigService / BackupService
+   - 在 `main.py` 添加 `web` 命令
 
-**历史 P0（已执行）**：按 `TECH_DESIGN_OUTPUT_ALIGNMENT.md` v2 已执行
-- 任务 1～5：rules、Parser、create_template、template.docx、测试适配 ✅
+2. **W2 阶段（核心页面）**：
+   - 实现章节排序、操作类型、列映射配置页面
+   - 实现图片上传 API
 
-### 致 Developer（历史任务）
-此前 P0/P1 任务已完成：
-- ✅ docxtpl 依赖已安装
-- ✅ 模板渲染器 `src/renderer/template_renderer.py` 已完成
-- ✅ Parser 已适配 report.json v2.0
-- ✅ MCP Server 已实现并可通过 `python -m src.mcp.server` 启动
+3. **W3 阶段（高级功能）**：
+   - 配置保存、版本回滚、YAML 预览、表单校验
+
+**技术方案**: `docs/TECH_DESIGN_WEB_CONFIG.md`
+**新增依赖**: `flask>=3.0.0`, `werkzeug>=3.0.0`
 
 ### 致 Tester
 测试任务已全部完成：
@@ -332,4 +358,6 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 # requirements.txt 新增
 docxtpl>=0.17.0
 fastmcp>=0.1.0
+flask>=3.0.0      # Web 配置中心 (M6)
+werkzeug>=3.0.0   # Web 配置中心 (M6)
 ```
