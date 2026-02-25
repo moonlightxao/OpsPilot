@@ -1,14 +1,9 @@
+<!-- DEBUG_OPSPILOT_WEB_V3_CHAPTERS -->
 <div class="space-y-6">
     <div class="bg-white rounded-lg shadow p-6">
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold">章节优先级配置</h3>
             <div class="flex gap-2">
-                <div id="batch-chapters-bar" class="hidden items-center gap-2 mr-2">
-                    <span class="text-sm text-gray-500">已选择 <span id="chapters-selected-count">0</span> 项</span>
-                    <button onclick="batchDeleteChapters()" id="batch-delete-chapters-btn" class="px-3 py-1 bg-danger text-white text-sm rounded hover:bg-red-600">
-                        批量删除
-                    </button>
-                </div>
                 <button onclick="showAddChapterModal()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">
                     + 新增章节
                 </button>
@@ -17,6 +12,12 @@
         <p class="text-gray-500 text-sm mb-4">拖拽调整章节顺序，数值越小越优先。勾选后可批量删除。</p>
         <div id="chapters-list" class="space-y-2">
             <p class="text-gray-500">加载中...</p>
+        </div>
+        <div id="batch-chapters-bar" class="hidden mt-4 pt-3 border-t flex items-center justify-between">
+            <span class="text-sm text-gray-500">已选择 <span id="chapters-selected-count">0</span> 项</span>
+            <button onclick="batchDeleteChapters()" id="batch-delete-chapters-btn" class="px-3 py-1 bg-danger text-white text-sm rounded hover:bg-red-600">
+                批量删除
+            </button>
         </div>
     </div>
 </div>
@@ -133,11 +134,9 @@
         
         if (count > 0) {
             bar.classList.remove('hidden');
-            bar.style.display = 'flex';
             countEl.textContent = count;
         } else {
             bar.classList.add('hidden');
-            bar.style.display = '';
         }
     }
 
