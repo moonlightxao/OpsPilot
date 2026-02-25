@@ -6,8 +6,18 @@
 
 import yaml
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
+
+
+# 核心字段关键词映射
+CORE_FIELD_KEYWORDS = {
+    "action_type": ["操作类型", "操作", "action"],
+    "deploy_unit": ["部署单元", "应用名", "服务名", "应用名称"],
+    "executor": ["执行人", "实施人", "负责人", "复核人"],
+    "task_name": ["任务名", "任务名称", "task"],
+    "external_link": ["外部链接", "链接", "url"]
+}
 
 
 class ConfigService:
@@ -158,9 +168,55 @@ class ConfigService:
 
     # ========== 操作类型相关 ==========
 
-    def get_action_library(self) -> Dict[str, Dict[str, Any]]:
-        """获取操作类型配置"""
-        return self.get('action_library', {})
+    def _is_flat_action_library(self, library: Dict[str, Any]) -> bool:
+        """
+        检测 action_library 是否为旧格式（扁平结构）
+
+        旧格式示例:
+        {
+            "新增": {"instruction": "...", "is_high_risk": false},
+            "删除": {"instruction": "...", "is_high_risk": true}
+        }
+
+        新格式示例:
+        {
+            "应用配置": {
+                "新增": {"instruction": "...", "is_high_risk": false},
+                "删除": {"instruction": "...", "is_high_risk": true}
+            },
+            "容器配置": {
+                "扩容": {"instruction": "...", "is_high_risk": false}
+            }
+        }
+        """
+        if not library:
+            return False
+        first_value = next(iter(library.values()), {})
+        # 旧格式: 顶层键的值包含 instruction 或 is_high_risk
+        if isinstance(first_value, dict):
+            return 'instruction' in first_value or 'is_high_risk' in first_value
+        return False
+
+    def get_action_library(self, auto_migrate: bool = True) -> Dict[str, Dict[str, Any]]:
+        """
+        获取操作类型配置，自动兼容新旧格式
+
+        Args:
+            auto_migrate: 是否自动迁移旧格式到新格式
+
+        Returns:
+            操作类型配置（新格式）
+        """
+        raw_library = self.get('action_library', {})
+
+        # 检测并迁移旧格式
+        if self._is_flat_action_library(raw_library):
+            if auto_migrate:
+                # 迁移到新格式，归入"默认"章节
+                return {"默认": raw_library}
+            return raw_library
+
+        return raw_library
 
     def set_action_library(self, action_library: Dict[str, Dict[str, Any]]) -> None:
         """设置操作类型配置"""
@@ -170,39 +226,161 @@ class ConfigService:
         self._sync_high_risk_keywords(config, action_library)
         self.save(config)
 
-    def get_action(self, action_name: str) -> Optional[Dict[str, Any]]:
-        """获取单个操作类型配置"""
-        action_library = self.get_action_library()
-        return action_library.get(action_name)
+    # ========== 章节操作类型相关（v2 新增） ==========
 
-    def set_action(self, action_name: str, action_config: Dict[str, Any]) -> None:
-        """设置单个操作类型配置"""
-        action_library = self.get_action_library()
-        action_library[action_name] = action_config
-        self.set_action_library(action_library)
+    def get_chapter_actions(self, chapter: str) -> Dict[str, Dict[str, Any]]:
+        """获取指定章节的操作类型配置"""
+        library = self.get_action_library()
+        return library.get(chapter, {})
 
-    def delete_action(self, action_name: str) -> bool:
-        """删除操作类型"""
-        action_library = self.get_action_library()
-        if action_name in action_library:
-            del action_library[action_name]
-            self.set_action_library(action_library)
+    def set_chapter_actions(self, chapter: str, actions: Dict[str, Any]) -> None:
+        """设置指定章节的操作类型配置"""
+        library = self.get_action_library(auto_migrate=False)
+        library[chapter] = actions
+        self.set_action_library(library)
+
+    def set_chapter_action(self, chapter: str, action_name: str, config: Dict[str, Any]) -> None:
+        """设置指定章节的某个操作类型"""
+        library = self.get_action_library(auto_migrate=False)
+        if chapter not in library:
+            library[chapter] = {}
+        library[chapter][action_name] = config
+        self.set_action_library(library)
+
+    def delete_chapter_action(self, chapter: str, action_name: str) -> bool:
+        """删除指定章节的某个操作类型"""
+        library = self.get_action_library(auto_migrate=False)
+        if chapter in library and action_name in library[chapter]:
+            del library[chapter][action_name]
+            self.set_action_library(library)
             return True
         return False
 
-    def _sync_high_risk_keywords(self, config: Dict[str, Any], action_library: Dict[str, Dict[str, Any]]) -> None:
-        """同步高危关键字列表（自动从 action_library 中提取）"""
-        high_risk_keywords = [
-            name for name, cfg in action_library.items()
-            if cfg.get('is_high_risk', False)
-        ]
-        config['high_risk_keywords'] = high_risk_keywords
+    # ========== 兼容旧 API ==========
+
+    def get_action(self, action_name: str) -> Optional[Dict[str, Any]]:
+        """获取单个操作类型配置（兼容旧格式）"""
+        action_library = self.get_action_library()
+        # 遍历所有章节查找
+        for chapter, actions in action_library.items():
+            if action_name in actions:
+                return actions[action_name]
+        return None
+
+    def set_action(self, action_name: str, action_config: Dict[str, Any]) -> None:
+        """设置单个操作类型配置（默认章节）"""
+        library = self.get_action_library(auto_migrate=False)
+        # 使用第一个章节或"默认"章节
+        if library:
+            first_chapter = next(iter(library.keys()))
+        else:
+            first_chapter = "默认"
+            library[first_chapter] = {}
+        library[first_chapter][action_name] = action_config
+        self.set_action_library(library)
+
+    def delete_action(self, action_name: str) -> bool:
+        """删除操作类型（遍历所有章节）"""
+        library = self.get_action_library(auto_migrate=False)
+        for chapter, actions in library.items():
+            if action_name in actions:
+                del actions[action_name]
+                self.set_action_library(library)
+                return True
+        return False
+
+    # ========== 批量删除相关（v2 新增） ==========
+
+    def batch_delete_chapter_actions(self, chapter: str, action_names: list) -> list:
+        """批量删除指定章节的操作类型"""
+        library = self.get_action_library(auto_migrate=False)
+        deleted = []
+        if chapter in library:
+            for name in action_names:
+                if name in library[chapter]:
+                    del library[chapter][name]
+                    deleted.append(name)
+            if deleted:
+                self.set_action_library(library)
+        return deleted
+
+    def batch_delete_chapters(self, sheet_names: list) -> list:
+        """批量删除章节"""
+        priority_rules = self.get_priority_rules()
+        deleted = []
+        for name in sheet_names:
+            if name in priority_rules:
+                del priority_rules[name]
+                deleted.append(name)
+        if deleted:
+            self.set_priority_rules(priority_rules)
+        return deleted
+
+    def batch_delete_sheet_mappings(self, sheet_names: list) -> list:
+        """批量删除 Sheet 列映射"""
+        mapping = self.get_sheet_column_mapping()
+        deleted = []
+        for name in sheet_names:
+            if name in mapping:
+                del mapping[name]
+                deleted.append(name)
+        if deleted:
+            self.set_sheet_column_mapping(mapping)
+        return deleted
+
+    def _sync_high_risk_keywords(self, config: Dict[str, Any], action_library: Dict[str, Any]) -> None:
+        """
+        同步高危关键字列表（从所有章节中提取）
+
+        新格式 action_library 结构:
+        {
+            "章节名": {
+                "操作类型名": {"is_high_risk": true/false, ...}
+            }
+        }
+        """
+        high_risk_keywords = []
+
+        # 遍历所有章节
+        for chapter, actions in action_library.items():
+            if not isinstance(actions, dict):
+                continue
+            # 遍历该章节的所有操作类型
+            for action_name, action_config in actions.items():
+                if isinstance(action_config, dict) and action_config.get('is_high_risk', False):
+                    high_risk_keywords.append(action_name)
+
+        # 去重
+        config['high_risk_keywords'] = list(set(high_risk_keywords))
 
     # ========== 列映射相关 ==========
 
+    def _normalize_mapping(self, mapping: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        规范化列映射配置，确保所有键和列名都是字符串类型
+        解决 YAML 解析时将纯数字列名解析为 int 导致的 JSON 序列化问题
+        """
+        if not mapping:
+            return mapping
+
+        normalized = {}
+        for sheet_name, sheet_config in mapping.items():
+            # 确保 Sheet 名称是字符串
+            sheet_name = str(sheet_name)
+
+            normalized[sheet_name] = {
+                "columns": [str(col) for col in sheet_config.get("columns", [])],
+                "column_mapping": {
+                    str(col): [str(alias) for alias in aliases]
+                    for col, aliases in sheet_config.get("column_mapping", {}).items()
+                }
+            }
+        return normalized
+
     def get_sheet_column_mapping(self) -> Dict[str, Dict[str, Any]]:
         """获取 Sheet 列映射配置"""
-        return self.get('sheet_column_mapping', {})
+        mapping = self.get('sheet_column_mapping', {})
+        return self._normalize_mapping(mapping)
 
     def set_sheet_column_mapping(self, mapping: Dict[str, Dict[str, Any]]) -> None:
         """设置 Sheet 列映射配置"""
@@ -309,3 +487,115 @@ class ConfigService:
 
         self.save(config)
         return updated
+
+    # ========== 核心字段同步相关 ==========
+
+    def sync_core_fields_from_columns(self) -> dict:
+        """
+        从 sheet_column_mapping 同步列名到 core_fields
+
+        同步规则：
+        1. 遍历所有 Sheet 的 columns，收集去重后的列名列表
+        2. 根据关键词匹配规则，将列名添加到对应核心字段的 aliases
+        3. 增量更新：仅添加新列名，不删除现有别名
+        4. 保持 required 属性不变
+
+        Returns:
+            同步结果 {
+                "synced_count": 同步的核心字段数量,
+                "updated_fields": 更新的字段列表,
+                "new_aliases": {字段名: [新增别名列表]}
+            }
+        """
+        config = self.load()
+
+        # 1. 收集所有列名并去重
+        all_columns = set()
+        sheet_column_mapping = config.get("sheet_column_mapping", {})
+        for sheet_name, sheet_config in sheet_column_mapping.items():
+            columns = sheet_config.get("columns", [])
+            all_columns.update(columns)
+
+        # 2. 初始化 core_fields（如果不存在）
+        if "core_fields" not in config:
+            config["core_fields"] = self._get_default_core_fields()
+
+        core_fields = config["core_fields"]
+
+        # 3. 遍历列名，根据关键词匹配到核心字段
+        result = {
+            "synced_count": 0,
+            "updated_fields": [],
+            "new_aliases": {}
+        }
+
+        for column in all_columns:
+            matched_field = self._match_core_field(column)
+            if matched_field and matched_field in core_fields:
+                # 获取当前 aliases
+                current_aliases = set(core_fields[matched_field].get("aliases", []))
+
+                # 如果列名不在 aliases 中，添加
+                if column not in current_aliases:
+                    current_aliases.add(column)
+                    core_fields[matched_field]["aliases"] = list(current_aliases)
+
+                    # 记录结果
+                    if matched_field not in result["new_aliases"]:
+                        result["new_aliases"][matched_field] = []
+                    result["new_aliases"][matched_field].append(column)
+
+                    if matched_field not in result["updated_fields"]:
+                        result["updated_fields"].append(matched_field)
+
+        # 4. 保存配置
+        if result["updated_fields"]:
+            config["core_fields"] = core_fields
+            self.save(config)
+            result["synced_count"] = len(result["updated_fields"])
+
+        return result
+
+    def _match_core_field(self, column_name: str) -> Optional[str]:
+        """
+        根据列名匹配核心字段
+
+        Args:
+            column_name: 列名
+
+        Returns:
+            匹配的核心字段名，无匹配返回 None
+        """
+        column_lower = column_name.lower()
+
+        for field_name, keywords in CORE_FIELD_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword.lower() in column_lower:
+                    return field_name
+
+        return None
+
+    def _get_default_core_fields(self) -> dict:
+        """获取默认的核心字段配置"""
+        return {
+            "action_type": {
+                "aliases": ["操作类型", "操作", "Action"],
+                "required": True
+            },
+            "deploy_unit": {
+                "aliases": ["部署单元", "应用名", "服务名"],
+                "required": False
+            },
+            "executor": {
+                "aliases": ["执行人", "实施人", "负责人"],
+                "required": False
+            },
+            "external_link": {
+                "aliases": ["外部链接", "链接", "URL"],
+                "required": False
+            },
+            "task_name": {
+                "aliases": ["任务名", "任务名称"],
+                "required": True
+            }
+        }

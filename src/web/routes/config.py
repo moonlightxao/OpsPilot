@@ -30,12 +30,9 @@ def save_config():
         if not config:
             return jsonify({"success": False, "error": "配置数据不能为空"}), 400
 
-        # 创建备份（在保存前）
         from ..services import BackupService
-        backup_service = BackupService()
-        backup_service.create_backup()
+        BackupService().create_backup()
 
-        # 保存配置
         config_service.save(config)
         return jsonify({"success": True, "message": "配置保存成功"})
     except ValueError as e:
@@ -64,7 +61,6 @@ def set_priority_rules():
         if not isinstance(rules, dict):
             return jsonify({"success": False, "error": "配置格式错误"}), 400
 
-        # 创建备份
         from ..services import BackupService
         BackupService().create_backup()
 
@@ -104,6 +100,33 @@ def delete_chapter(sheet_name: str):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@config_bp.route('/priority-rules/batch-delete', methods=['POST'])
+def batch_delete_chapters():
+    """批量删除章节"""
+    try:
+        data = request.get_json()
+        sheet_names = data.get('sheet_names', [])
+
+        if not isinstance(sheet_names, list):
+            return jsonify({"success": False, "error": "参数格式错误"}), 400
+
+        if not sheet_names:
+            return jsonify({"success": False, "error": "请选择要删除的章节"}), 400
+
+        from ..services import BackupService
+        BackupService().create_backup()
+
+        deleted = config_service.batch_delete_chapters(sheet_names)
+
+        return jsonify({
+            "success": True,
+            "message": f"已删除 {len(deleted)} 个章节",
+            "deleted": deleted
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ========== 操作类型配置 ==========
 
 @config_bp.route('/action-library', methods=['GET'])
@@ -124,7 +147,6 @@ def set_action_library():
         if not isinstance(library, dict):
             return jsonify({"success": False, "error": "配置格式错误"}), 400
 
-        # 创建备份
         from ..services import BackupService
         BackupService().create_backup()
 
@@ -133,6 +155,98 @@ def set_action_library():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+
+@config_bp.route('/action-library/batch-delete', methods=['POST'])
+def batch_delete_actions():
+    """批量删除操作类型"""
+    try:
+        data = request.get_json()
+        chapter = data.get('chapter')
+        action_names = data.get('action_names', [])
+
+        if not chapter:
+            return jsonify({"success": False, "error": "缺少章节参数"}), 400
+
+        if not isinstance(action_names, list):
+            return jsonify({"success": False, "error": "参数格式错误"}), 400
+
+        if not action_names:
+            return jsonify({"success": False, "error": "请选择要删除的操作类型"}), 400
+
+        from ..services import BackupService
+        BackupService().create_backup()
+
+        deleted = config_service.batch_delete_chapter_actions(chapter, action_names)
+
+        return jsonify({
+            "success": True,
+            "message": f"已删除 {len(deleted)} 个操作类型",
+            "deleted": deleted
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ========== 章节操作类型配置（v2 新增） ==========
+# 注意：这些路由必须放在 /action-library/<action_name> 路由之前
+# 因为 Flask 按定义顺序匹配路由
+
+@config_bp.route('/action-library/chapter/<path:chapter>', methods=['GET'])
+def get_chapter_actions(chapter: str):
+    """获取指定章节的操作类型列表"""
+    try:
+        actions = config_service.get_chapter_actions(chapter)
+        return jsonify({"success": True, "data": actions})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@config_bp.route('/action-library/chapter/<path:chapter>', methods=['PUT'])
+def set_chapter_actions(chapter: str):
+    """设置指定章节的操作类型配置"""
+    try:
+        actions = request.get_json()
+        if not isinstance(actions, dict):
+            return jsonify({"success": False, "error": "配置格式错误"}), 400
+
+        from ..services import BackupService
+        BackupService().create_backup()
+
+        config_service.set_chapter_actions(chapter, actions)
+        return jsonify({"success": True, "message": "章节操作类型配置保存成功"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@config_bp.route('/action-library/chapter/<path:chapter>/<path:action_name>', methods=['PUT'])
+def set_chapter_action(chapter: str, action_name: str):
+    """设置指定章节的某个操作类型"""
+    try:
+        action_config = request.get_json()
+        if not action_config:
+            return jsonify({"success": False, "error": "配置数据不能为空"}), 400
+
+        from ..services import BackupService
+        BackupService().create_backup()
+
+        config_service.set_chapter_action(chapter, action_name, action_config)
+        return jsonify({"success": True, "message": "操作类型保存成功"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@config_bp.route('/action-library/chapter/<path:chapter>/<path:action_name>', methods=['DELETE'])
+def delete_chapter_action(chapter: str, action_name: str):
+    """删除指定章节的某个操作类型"""
+    try:
+        if config_service.delete_chapter_action(chapter, action_name):
+            return jsonify({"success": True, "message": "操作类型删除成功"})
+        return jsonify({"success": False, "error": "操作类型不存在"}), 404
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ========== 兼容旧 API（放在章节路由之后） ==========
 
 @config_bp.route('/action-library/<path:action_name>', methods=['GET'])
 def get_action(action_name: str):
@@ -154,7 +268,6 @@ def set_action(action_name: str):
         if not action_config:
             return jsonify({"success": False, "error": "配置数据不能为空"}), 400
 
-        # 创建备份
         from ..services import BackupService
         BackupService().create_backup()
 
@@ -195,12 +308,38 @@ def set_sheet_column_mapping():
         if not isinstance(mapping, dict):
             return jsonify({"success": False, "error": "配置格式错误"}), 400
 
-        # 创建备份
         from ..services import BackupService
         BackupService().create_backup()
 
         config_service.set_sheet_column_mapping(mapping)
         return jsonify({"success": True, "message": "列映射配置保存成功"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@config_bp.route('/sheet-column-mapping/batch-delete', methods=['POST'])
+def batch_delete_mappings():
+    """批量删除 Sheet 列映射"""
+    try:
+        data = request.get_json()
+        sheet_names = data.get('sheet_names', [])
+
+        if not isinstance(sheet_names, list):
+            return jsonify({"success": False, "error": "参数格式错误"}), 400
+
+        if not sheet_names:
+            return jsonify({"success": False, "error": "请选择要删除的 Sheet"}), 400
+
+        from ..services import BackupService
+        BackupService().create_backup()
+
+        deleted = config_service.batch_delete_sheet_mappings(sheet_names)
+
+        return jsonify({
+            "success": True,
+            "message": f"已删除 {len(deleted)} 个 Sheet 列映射",
+            "deleted": deleted
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -225,7 +364,6 @@ def set_sheet_mapping(sheet_name: str):
         if not sheet_config:
             return jsonify({"success": False, "error": "配置数据不能为空"}), 400
 
-        # 创建备份
         from ..services import BackupService
         BackupService().create_backup()
 
@@ -250,27 +388,7 @@ def delete_sheet_mapping(sheet_name: str):
 
 @config_bp.route('/batch-save', methods=['POST'])
 def batch_save_sheets():
-    """
-    批量保存 Sheet 配置（用于 Excel 一键保存功能）
-
-    请求体:
-        {
-            "sheets": [
-                {"name": "Sheet1", "columns": [...], "is_first_sheet": true},
-                {"name": "Sheet2", "columns": [...], "is_first_sheet": false}
-            ]
-        }
-
-    响应:
-        {
-            "success": true,
-            "message": "配置已保存",
-            "updated": {
-                "sheet_column_mapping": ["Sheet1", "Sheet2"],
-                "priority_rules": ["Sheet2"]
-            }
-        }
-    """
+    """批量保存 Sheet 配置"""
     try:
         data = request.get_json()
         if not data:
@@ -283,11 +401,9 @@ def batch_save_sheets():
         if not sheets:
             return jsonify({"success": False, "error": "sheets 不能为空"}), 400
 
-        # 创建备份
         from ..services import BackupService
         BackupService().create_backup()
 
-        # 执行批量保存
         updated = config_service.batch_save_sheets(sheets)
 
         return jsonify({
@@ -297,3 +413,38 @@ def batch_save_sheets():
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ========== 核心字段同步 ==========
+
+@config_bp.route('/sync-core-fields', methods=['POST'])
+def sync_core_fields():
+    """
+    同步核心字段
+
+    从 sheet_column_mapping 中收集所有列名，
+    根据关键词匹配规则更新 core_fields 的 aliases
+    """
+    try:
+        from ..services import BackupService
+        BackupService().create_backup()
+
+        result = config_service.sync_core_fields_from_columns()
+
+        if result["synced_count"] > 0:
+            return jsonify({
+                "success": True,
+                "message": f"已同步 {result['synced_count']} 个核心字段",
+                "data": result
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "message": "无需同步，所有列名已存在于核心字段中",
+                "data": result
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500

@@ -3,6 +3,15 @@
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold">Sheet 列映射配置</h3>
             <div class="flex gap-2">
+                <div id="batch-mappings-bar" class="hidden flex items-center gap-2 mr-2">
+                    <span class="text-sm text-gray-500">已选择 <span id="mappings-selected-count">0</span> 项</span>
+                    <button onclick="batchDeleteMappings()" id="batch-delete-mappings-btn" class="px-3 py-1 bg-danger text-white text-sm rounded hover:bg-red-600">
+                        批量删除
+                    </button>
+                </div>
+                <button onclick="syncCoreFields()" id="sync-core-fields-btn" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
+                    同步到核心字段
+                </button>
                 <button onclick="showBatchSaveModal()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
                     Excel 一键保存
                 </button>
@@ -14,7 +23,7 @@
                 </button>
             </div>
         </div>
-        <p class="text-gray-500 text-sm mb-4">配置各 Sheet 的列名映射，支持别名匹配。</p>
+        <p class="text-gray-500 text-sm mb-4">配置各 Sheet 的列名映射，支持别名匹配。勾选后可批量删除。</p>
         <div id="mappings-list" class="space-y-4">
             <p class="text-gray-500">加载中...</p>
         </div>
@@ -96,15 +105,14 @@
 <script>
     let mappingsData = {};
     let editingSheet = null;
-    let batchSaveData = null; // 存储一键保存的预览数据
+    let batchSaveData = null;
+    let selectedMappings = new Set();
 
     document.addEventListener('DOMContentLoaded', function() { 
         loadMappings(); 
         setActiveNav('columns');
         
-        // 绑定 Excel 一键保存文件选择事件
         document.getElementById('batch-save-file').addEventListener('change', handleBatchSaveFile);
-        // 绑定 Excel 辅助识别文件选择事件
         document.getElementById('excel-identify-file').addEventListener('change', handleExcelIdentifyFile);
     });
 
@@ -119,26 +127,84 @@
     function renderMappings() {
         const container = document.getElementById('mappings-list');
         const entries = Object.entries(mappingsData);
-        if (entries.length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无 Sheet 映射配置，点击「Excel 一键保存」快速导入</p>'; return; }
-        container.innerHTML = entries.map(([name, config]) => `
-            <div class="border rounded-lg p-4">
-                <div class="flex justify-between items-start">
-                    <div class="flex-1">
-                        <span class="font-medium">${name}</span>
-                        <p class="text-sm text-gray-600 mt-1">输出列: ${(config.columns || []).join(', ')}</p>
-                        <div class="mt-2 flex flex-wrap gap-1">
-                            ${Object.entries(config.column_mapping || {}).map(([col, aliases]) => 
-                                `<span class="tag">${col}: ${aliases.slice(0, 2).join(', ')}${aliases.length > 2 ? '...' : ''}</span>`
-                            ).join('')}
+        if (entries.length === 0) { 
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无 Sheet 映射配置，点击「Excel 一键保存」快速导入</p>'; 
+            return; 
+        }
+        container.innerHTML = entries.map(([name, config]) => {
+            const isSelected = selectedMappings.has(name);
+            return `
+                <div class="border rounded-lg p-4 ${isSelected ? 'ring-2 ring-primary bg-blue-50' : ''}">
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" class="mt-1" ${isSelected ? 'checked' : ''} 
+                               onchange="toggleMappingSelection('${name}')">
+                        <div class="flex-1">
+                            <span class="font-medium">${name}</span>
+                            <p class="text-sm text-gray-600 mt-1">输出列: ${(config.columns || []).join(', ')}</p>
+                            <div class="mt-2 flex flex-wrap gap-1">
+                                ${Object.entries(config.column_mapping || {}).map(([col, aliases]) => 
+                                    `<span class="tag">${col}: ${aliases.slice(0, 2).join(', ')}${aliases.length > 2 ? '...' : ''}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="editSheet('${name}')" class="text-primary hover:text-blue-700">编辑</button>
+                            <button onclick="deleteSheet('${name}')" class="text-danger hover:text-red-700">删除</button>
                         </div>
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick="editSheet('${name}')" class="text-primary hover:text-blue-700">编辑</button>
-                        <button onclick="deleteSheet('${name}')" class="text-danger hover:text-red-700">删除</button>
-                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
+    }
+
+    // 切换选择状态
+    function toggleMappingSelection(name) {
+        if (selectedMappings.has(name)) {
+            selectedMappings.delete(name);
+        } else {
+            selectedMappings.add(name);
+        }
+        updateBatchMappingsUI();
+        renderMappings();
+    }
+
+    // 更新批量操作 UI
+    function updateBatchMappingsUI() {
+        const count = selectedMappings.size;
+        const bar = document.getElementById('batch-mappings-bar');
+        const countEl = document.getElementById('mappings-selected-count');
+        
+        if (count > 0) {
+            bar.classList.remove('hidden');
+            countEl.textContent = count;
+        } else {
+            bar.classList.add('hidden');
+        }
+    }
+
+    // 批量删除
+    function batchDeleteMappings() {
+        const count = selectedMappings.size;
+        if (count === 0) return;
+        
+        const names = Array.from(selectedMappings);
+        showConfirm('批量删除确认', `确定要删除选中的 ${count} 个 Sheet 列映射吗？此操作不可撤销。`, async () => {
+            try {
+                const res = await apiRequest('/api/config/sheet-column-mapping/batch-delete', 'POST', {
+                    sheet_names: names
+                });
+                if (res.success) {
+                    showToast(`已删除 ${res.deleted.length} 个 Sheet 列映射`, 'success');
+                    selectedMappings.clear();
+                    updateBatchMappingsUI();
+                    loadMappings();
+                } else {
+                    showToast(res.error || '删除失败', 'error');
+                }
+            } catch (err) {
+                showToast('删除失败', 'error');
+            }
+        });
     }
 
     function showAddSheetModal() {
@@ -147,6 +213,7 @@
         document.getElementById('sheet-name').value = '';
         document.getElementById('sheet-columns').value = '';
         document.getElementById('sheet-mapping').value = '';
+        document.getElementById('sheet-name').disabled = false;
         document.getElementById('sheet-modal').classList.remove('hidden');
     }
 
@@ -158,6 +225,7 @@
         editingSheet = name;
         document.getElementById('sheet-modal-title').textContent = '编辑 Sheet 映射';
         document.getElementById('sheet-name').value = name;
+        document.getElementById('sheet-name').disabled = true;
         document.getElementById('sheet-columns').value = (config.columns || []).join(', ');
         const mappingLines = Object.entries(config.column_mapping || {}).map(([col, aliases]) => `${col}=${aliases.join(',')}`);
         document.getElementById('sheet-mapping').value = mappingLines.join('\n');
@@ -191,7 +259,12 @@
         showConfirm('删除 Sheet 映射', `确定要删除 "${name}" 的列映射吗？`, async () => {
             try {
                 const res = await apiRequest(`/api/config/sheet-column-mapping/${encodeURIComponent(name)}`, 'DELETE');
-                if (res.success) { showToast('Sheet 映射已删除', 'success'); loadMappings(); }
+                if (res.success) { 
+                    showToast('Sheet 映射已删除', 'success'); 
+                    selectedMappings.delete(name);
+                    updateBatchMappingsUI();
+                    loadMappings(); 
+                }
                 else { showToast(res.error || '删除失败', 'error'); }
             } catch (err) { showToast('删除失败', 'error'); }
         });
@@ -349,6 +422,41 @@
         } finally {
             btn.disabled = false;
             btn.textContent = '保存到配置';
+        }
+    }
+
+    // ========== 核心字段同步 ==========
+    
+    async function syncCoreFields() {
+        const btn = document.getElementById('sync-core-fields-btn');
+        btn.disabled = true;
+        btn.textContent = '同步中...';
+        
+        try {
+            const res = await apiRequest('/api/config/sync-core-fields', 'POST');
+            
+            if (res.success) {
+                const data = res.data || {};
+                if (data.synced_count > 0) {
+                    showToast(`已同步 ${data.synced_count} 个核心字段`, 'success');
+                    // 如果有新增别名，在控制台显示详情
+                    if (data.new_aliases && Object.keys(data.new_aliases).length > 0) {
+                        const details = Object.entries(data.new_aliases)
+                            .map(([field, aliases]) => `${field}: ${aliases.join(', ')}`)
+                            .join('\n');
+                        console.log('新增别名:\n' + details);
+                    }
+                } else {
+                    showToast('无需同步，所有列名已存在于核心字段中', 'info');
+                }
+            } else {
+                showToast(res.error || '同步失败', 'error');
+            }
+        } catch (err) {
+            showToast('同步失败: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '同步到核心字段';
         }
     }
 </script>
