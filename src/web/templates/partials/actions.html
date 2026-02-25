@@ -1,0 +1,146 @@
+<div class="space-y-6">
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">操作类型配置</h3>
+            <button onclick="showAddActionModal()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">
+                + 新增操作类型
+            </button>
+        </div>
+        <p class="text-gray-500 text-sm mb-4">配置操作类型及其操作说明，支持富文本编辑。</p>
+        <div id="actions-list" class="space-y-4">
+            <p class="text-gray-500">加载中...</p>
+        </div>
+    </div>
+</div>
+
+<div id="action-modal" class="modal-overlay hidden">
+    <div class="modal-content p-6" style="max-width: 700px;">
+        <h3 class="text-lg font-semibold mb-4" id="action-modal-title">新增操作类型</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">操作名称 *</label>
+                <input type="text" id="action-name" class="w-full border rounded px-3 py-2" placeholder="如：新增、修改、删除">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">操作说明</label>
+                <textarea id="action-instruction" class="w-full border rounded px-3 py-2 h-24" placeholder="在配置管理中心，点击新增按钮，新增以下配置："></textarea>
+            </div>
+            <div class="flex items-center gap-4">
+                <label class="flex items-center">
+                    <input type="checkbox" id="action-high-risk" class="mr-2" onchange="toggleHighRiskNote()">
+                    <span class="text-sm">高危操作</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="checkbox" id="action-render-table" class="mr-2" checked>
+                    <span class="text-sm">渲染任务表格</span>
+                </label>
+            </div>
+            <div id="high-risk-note-section" class="hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-1">高危注意事项</label>
+                <textarea id="action-high-risk-note" class="w-full border rounded px-3 py-2 h-20" placeholder="请谨慎操作，确认无误后再执行..."></textarea>
+            </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button onclick="closeActionModal()" class="px-4 py-2 border rounded hover:bg-gray-50">取消</button>
+            <button onclick="saveAction()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let actionsData = {};
+    let editingAction = null;
+
+    document.addEventListener('DOMContentLoaded', function() { loadActions(); setActiveNav('actions'); });
+
+    async function loadActions() {
+        try {
+            const res = await apiRequest('/api/config/action-library');
+            if (res.success) { actionsData = res.data; renderActions(); }
+            else { showToast('加载操作类型失败', 'error'); }
+        } catch (err) { showToast('加载操作类型失败', 'error'); }
+    }
+
+    function renderActions() {
+        const container = document.getElementById('actions-list');
+        const entries = Object.entries(actionsData);
+        if (entries.length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无操作类型配置</p>'; return; }
+        container.innerHTML = entries.map(([name, config]) => `
+            <div class="border rounded-lg p-4 ${config.is_high_risk ? 'border-red-300 bg-red-50' : ''}">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">${name}</span>
+                            ${config.is_high_risk ? '<span class="px-2 py-0.5 bg-red-500 text-white text-xs rounded">高危</span>' : ''}
+                        </div>
+                        <p class="text-sm text-gray-600 mt-1">${config.instruction || '无操作说明'}</p>
+                        <p class="text-xs text-gray-400 mt-1">渲染表格: ${config.render_table ? '是' : '否'}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="editAction('${name}')" class="text-primary hover:text-blue-700">编辑</button>
+                        <button onclick="deleteAction('${name}')" class="text-danger hover:text-red-700">删除</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function showAddActionModal() {
+        editingAction = null;
+        document.getElementById('action-modal-title').textContent = '新增操作类型';
+        document.getElementById('action-name').value = '';
+        document.getElementById('action-instruction').value = '';
+        document.getElementById('action-high-risk').checked = false;
+        document.getElementById('action-render-table').checked = true;
+        document.getElementById('action-high-risk-note').value = '';
+        document.getElementById('high-risk-note-section').classList.add('hidden');
+        document.getElementById('action-modal').classList.remove('hidden');
+    }
+
+    function closeActionModal() { document.getElementById('action-modal').classList.add('hidden'); }
+
+    function toggleHighRiskNote() {
+        const isHighRisk = document.getElementById('action-high-risk').checked;
+        document.getElementById('high-risk-note-section').classList.toggle('hidden', !isHighRisk);
+    }
+
+    function editAction(name) {
+        const config = actionsData[name];
+        if (!config) return;
+        editingAction = name;
+        document.getElementById('action-modal-title').textContent = '编辑操作类型';
+        document.getElementById('action-name').value = name;
+        document.getElementById('action-instruction').value = config.instruction || '';
+        document.getElementById('action-high-risk').checked = config.is_high_risk || false;
+        document.getElementById('action-render-table').checked = config.render_table !== false;
+        document.getElementById('action-high-risk-note').value = config.high_risk_note || '';
+        toggleHighRiskNote();
+        document.getElementById('action-modal').classList.remove('hidden');
+    }
+
+    async function saveAction() {
+        const name = document.getElementById('action-name').value.trim();
+        if (!name) { showToast('请输入操作名称', 'error'); return; }
+        const actionConfig = {
+            instruction: document.getElementById('action-instruction').value.trim(),
+            is_high_risk: document.getElementById('action-high-risk').checked,
+            render_table: document.getElementById('action-render-table').checked,
+            high_risk_note: document.getElementById('action-high-risk-note').value.trim() || null
+        };
+        try {
+            const res = await apiRequest(`/api/config/action-library/${encodeURIComponent(name)}`, 'PUT', actionConfig);
+            if (res.success) { showToast('操作类型保存成功', 'success'); closeActionModal(); loadActions(); }
+            else { showToast(res.error || '保存失败', 'error'); }
+        } catch (err) { showToast('保存失败', 'error'); }
+    }
+
+    function deleteAction(name) {
+        showConfirm('删除操作类型', `确定要删除操作类型 "${name}" 吗？`, async () => {
+            try {
+                const res = await apiRequest(`/api/config/action-library/${encodeURIComponent(name)}`, 'DELETE');
+                if (res.success) { showToast('操作类型已删除', 'success'); loadActions(); }
+                else { showToast(res.error || '删除失败', 'error'); }
+            } catch (err) { showToast('删除失败', 'error'); }
+        });
+    }
+</script>

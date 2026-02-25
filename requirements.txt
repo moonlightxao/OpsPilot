@@ -18,6 +18,10 @@ click>=8.1.0
 # MCP 服务化
 fastmcp>=0.1.0
 
+# Web 配置中心
+flask>=3.0.0
+werkzeug>=3.0.0
+
 # 测试框架
 pytest>=7.0.0
 pytest-cov>=4.0.0

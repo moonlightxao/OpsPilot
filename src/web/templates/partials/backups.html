@@ -1,0 +1,85 @@
+<div class="space-y-6">
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">版本备份管理</h3>
+            <button onclick="createBackup()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">
+                创建备份
+            </button>
+        </div>
+        <p class="text-gray-500 text-sm mb-4">系统自动保存最近 10 个配置版本，支持一键回滚。</p>
+        <div id="backups-list" class="space-y-2">
+            <p class="text-gray-500">加载中...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() { loadBackups(); setActiveNav('backups'); });
+
+    async function loadBackups() {
+        try {
+            const res = await apiRequest('/api/backups');
+            if (res.success) { renderBackups(res.data); }
+            else { showToast('加载备份列表失败', 'error'); }
+        } catch (err) { showToast('加载备份列表失败', 'error'); }
+    }
+
+    function renderBackups(backups) {
+        const container = document.getElementById('backups-list');
+        if (backups.length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无备份</p>'; return; }
+        container.innerHTML = backups.map((backup, index) => `
+            <div class="flex items-center justify-between p-4 border rounded-lg ${index === 0 ? 'bg-blue-50 border-blue-200' : ''}">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium">${backup.datetime}</span>
+                        ${index === 0 ? '<span class="px-2 py-0.5 bg-blue-500 text-white text-xs rounded">最新</span>' : ''}
+                    </div>
+                    <p class="text-sm text-gray-500">文件: ${backup.filename} | 大小: ${(backup.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="previewBackup('${backup.filename}')" class="text-primary hover:text-blue-700">预览</button>
+                    <button onclick="restoreBackup('${backup.filename}')" class="text-warning hover:text-yellow-700">回滚</button>
+                    <button onclick="deleteBackup('${backup.filename}')" class="text-danger hover:text-red-700">删除</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    async function createBackup() {
+        try {
+            const res = await apiRequest('/api/backups/create', 'POST');
+            if (res.success) { showToast('备份创建成功', 'success'); loadBackups(); }
+            else { showToast(res.error || '创建失败', 'error'); }
+        } catch (err) { showToast('创建失败', 'error'); }
+    }
+
+    async function previewBackup(filename) {
+        try {
+            const res = await apiRequest(`/api/backups/${filename}`);
+            if (res.success) {
+                document.getElementById('yaml-content').textContent = res.data;
+                document.getElementById('yaml-modal').classList.remove('hidden');
+            } else { showToast(res.error || '预览失败', 'error'); }
+        } catch (err) { showToast('预览失败', 'error'); }
+    }
+
+    function restoreBackup(filename) {
+        showConfirm('确认回滚', `确定要回滚到 ${filename} 版本吗？当前配置将被备份。`, async () => {
+            try {
+                const res = await apiRequest(`/api/backups/${filename}/restore`, 'POST', { confirmed: true });
+                if (res.success) { showToast('回滚成功', 'success'); loadBackups(); }
+                else { showToast(res.error || '回滚失败', 'error'); }
+            } catch (err) { showToast('回滚失败', 'error'); }
+        });
+    }
+
+    function deleteBackup(filename) {
+        showConfirm('删除备份', `确定要删除备份 ${filename} 吗？`, async () => {
+            try {
+                const res = await apiRequest(`/api/backups/${filename}`, 'DELETE');
+                if (res.success) { showToast('备份已删除', 'success'); loadBackups(); }
+                else { showToast(res.error || '删除失败', 'error'); }
+            } catch (err) { showToast('删除失败', 'error'); }
+        });
+    }
+</script>

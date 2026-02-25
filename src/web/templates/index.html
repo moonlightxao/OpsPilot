@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="tab-content">
+    {% if active_tab == 'chapters' %}
+        {% include 'partials/chapters.html' %}
+    {% elif active_tab == 'actions' %}
+        {% include 'partials/actions.html' %}
+    {% elif active_tab == 'columns' %}
+        {% include 'partials/columns.html' %}
+    {% elif active_tab == 'backups' %}
+        {% include 'partials/backups.html' %}
+    {% else %}
+        <div class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-blue-100 rounded-full">
+                            <span class="text-2xl">📑</span>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">已配置章节</p>
+                            <p class="text-2xl font-bold" id="chapter-count">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-green-100 rounded-full">
+                            <span class="text-2xl">⚙️</span>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">操作类型</p>
+                            <p class="text-2xl font-bold" id="action-count">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-3 bg-purple-100 rounded-full">
+                            <span class="text-2xl">📋</span>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-gray-500 text-sm">Sheet 映射</p>
+                            <p class="text-2xl font-bold" id="mapping-count">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">快捷操作</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <a href="/chapters" class="p-4 border rounded-lg hover:bg-gray-50 text-center">
+                        <span class="text-2xl block mb-2">📑</span>
+                        <span class="text-gray-700">章节排序</span>
+                    </a>
+                    <a href="/actions" class="p-4 border rounded-lg hover:bg-gray-50 text-center">
+                        <span class="text-2xl block mb-2">⚙️</span>
+                        <span class="text-gray-700">操作类型</span>
+                    </a>
+                    <a href="/columns" class="p-4 border rounded-lg hover:bg-gray-50 text-center">
+                        <span class="text-2xl block mb-2">📋</span>
+                        <span class="text-gray-700">列映射</span>
+                    </a>
+                    <a href="/backups" class="p-4 border rounded-lg hover:bg-gray-50 text-center">
+                        <span class="text-2xl block mb-2">🔄</span>
+                        <span class="text-gray-700">版本回滚</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <h3 class="text-lg font-semibold mb-4">最近备份</h3>
+                <div id="recent-backups" class="space-y-2">
+                    <p class="text-gray-500">加载中...</p>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadOverviewStats();
+        setActiveNav(getCurrentTab());
+    });
+
+    function getCurrentTab() {
+        const path = window.location.pathname;
+        if (path.includes('/chapters')) return 'chapters';
+        if (path.includes('/actions')) return 'actions';
+        if (path.includes('/columns')) return 'columns';
+        if (path.includes('/backups')) return 'backups';
+        return 'overview';
+    }
+
+    async function loadOverviewStats() {
+        try {
+            const chaptersRes = await apiRequest('/api/config/priority-rules');
+            if (chaptersRes.success) {
+                document.getElementById('chapter-count').textContent = Object.keys(chaptersRes.data).length;
+            }
+            const actionsRes = await apiRequest('/api/config/action-library');
+            if (actionsRes.success) {
+                document.getElementById('action-count').textContent = Object.keys(actionsRes.data).length;
+            }
+            const mappingRes = await apiRequest('/api/config/sheet-column-mapping');
+            if (mappingRes.success) {
+                document.getElementById('mapping-count').textContent = Object.keys(mappingRes.data).length;
+            }
+            const backupsRes = await apiRequest('/api/backups');
+            if (backupsRes.success && backupsRes.data.length > 0) {
+                const container = document.getElementById('recent-backups');
+                container.innerHTML = backupsRes.data.slice(0, 5).map(b => `
+                    <div class="flex justify-between items-center py-2 border-b last:border-0">
+                        <span class="text-gray-600">${b.datetime}</span>
+                        <span class="text-sm text-gray-400">${(b.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('recent-backups').innerHTML = '<p class="text-gray-500">暂无备份</p>';
+            }
+        } catch (err) {
+            console.error('加载统计数据失败:', err);
+        }
+    }
+</script>
+{% endblock %}

@@ -8,6 +8,7 @@ Usage:
     python main.py analyze <excel_file>      # 分析阶段：输出 report.json
     python main.py generate <report_file>    # 生成阶段：输出 Word 文档
     python main.py run <excel_file>          # 完整流程：分析 + 生成
+    python main.py web                       # 启动 Web 配置中心
 """
 
 import json
@@ -183,6 +184,38 @@ def run(excel_file: str, output: str, config: str, force: bool):
         raise click.Abort()
     except Exception as e:
         click.echo(f"[Run] 错误: {e}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.option('--host', '-h', default='127.0.0.1', help='监听地址')
+@click.option('--port', '-p', default=8080, type=int, help='监听端口')
+@click.option('--no-browser', is_flag=True, help='不自动打开浏览器')
+def web(host: str, port: int, no_browser: bool):
+    """
+    启动 Web 配置中心
+
+    提供可视化的规则配置界面，支持章节排序、操作类型配置、列映射管理等功能。
+    """
+    try:
+        from src.web.app import create_app
+        import webbrowser
+
+        app = create_app()
+
+        if not no_browser:
+            webbrowser.open(f"http://{host}:{port}")
+
+        click.echo(f"[Web] 配置中心启动: http://{host}:{port}")
+        click.echo("[Web] 按 Ctrl+C 停止服务")
+        app.run(host=host, port=port, debug=False)
+
+    except ImportError as e:
+        click.echo(f"[Web] 错误: 缺少依赖 - {e}", err=True)
+        click.echo("[Web] 请运行: pip install flask werkzeug", err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(f"[Web] 错误: {e}", err=True)
         raise click.Abort()
 
 

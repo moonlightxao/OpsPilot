@@ -1,0 +1,118 @@
+<div class="space-y-6">
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">章节优先级配置</h3>
+            <button onclick="showAddChapterModal()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">
+                + 新增章节
+            </button>
+        </div>
+        <p class="text-gray-500 text-sm mb-4">拖拽调整章节顺序，数值越小越优先。配置将影响 Word 文档的输出顺序。</p>
+        <div id="chapters-list" class="space-y-2">
+            <p class="text-gray-500">加载中...</p>
+        </div>
+    </div>
+</div>
+
+<div id="add-chapter-modal" class="modal-overlay hidden">
+    <div class="modal-content p-6">
+        <h3 class="text-lg font-semibold mb-4">新增章节</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Sheet 名称 *</label>
+                <input type="text" id="new-chapter-name" class="w-full border rounded px-3 py-2" placeholder="如：数据库脚本部署">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">优先级数值 *</label>
+                <input type="number" id="new-chapter-priority" class="w-full border rounded px-3 py-2" placeholder="如：10">
+                <p class="text-sm text-gray-500 mt-1">数值越小，排序越靠前</p>
+            </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button onclick="closeAddChapterModal()" class="px-4 py-2 border rounded hover:bg-gray-50">取消</button>
+            <button onclick="addChapter()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">添加</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let chaptersData = {};
+    document.addEventListener('DOMContentLoaded', function() { loadChapters(); setActiveNav('chapters'); });
+
+    async function loadChapters() {
+        try {
+            const res = await apiRequest('/api/config/priority-rules');
+            if (res.success) { chaptersData = res.data; renderChapters(); initSortable(); }
+            else { showToast('加载章节配置失败', 'error'); }
+        } catch (err) { showToast('加载章节配置失败', 'error'); }
+    }
+
+    function renderChapters() {
+        const container = document.getElementById('chapters-list');
+        const sorted = Object.entries(chaptersData).sort((a, b) => a[1] - b[1]);
+        if (sorted.length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无章节配置</p>'; return; }
+        container.innerHTML = sorted.map(([name, priority]) => `
+            <div class="flex items-center bg-gray-50 rounded p-3 cursor-move" data-name="${name}" data-priority="${priority}">
+                <div class="mr-3 text-gray-400">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+                </div>
+                <span class="flex-1 font-medium">${name}</span>
+                <span class="text-sm text-gray-500 mr-4">优先级: ${priority}</span>
+                <button onclick="editChapter('${name}')" class="text-primary hover:text-blue-700 mr-2">编辑</button>
+                <button onclick="deleteChapter('${name}')" class="text-danger hover:text-red-700">删除</button>
+            </div>
+        `).join('');
+    }
+
+    function initSortable() {
+        const container = document.getElementById('chapters-list');
+        new Sortable(container, {
+            animation: 150, ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen',
+            onEnd: function() {
+                const items = container.querySelectorAll('[data-name]');
+                const newPriorities = {};
+                items.forEach((item, index) => { newPriorities[item.dataset.name] = (index + 1) * 10; });
+                chaptersData = newPriorities;
+                saveChapters();
+            }
+        });
+    }
+
+    async function saveChapters() {
+        try {
+            const res = await apiRequest('/api/config/priority-rules', 'PUT', chaptersData);
+            if (res.success) { showToast('章节配置已保存', 'success'); renderChapters(); }
+            else { showToast(res.error || '保存失败', 'error'); }
+        } catch (err) { showToast('保存失败', 'error'); }
+    }
+
+    function showAddChapterModal() { document.getElementById('add-chapter-modal').classList.remove('hidden'); document.getElementById('new-chapter-name').value = ''; document.getElementById('new-chapter-priority').value = ''; }
+    function closeAddChapterModal() { document.getElementById('add-chapter-modal').classList.add('hidden'); }
+
+    async function addChapter() {
+        const name = document.getElementById('new-chapter-name').value.trim();
+        const priority = parseInt(document.getElementById('new-chapter-priority').value);
+        if (!name) { showToast('请输入 Sheet 名称', 'error'); return; }
+        if (isNaN(priority)) { showToast('请输入有效的优先级数值', 'error'); return; }
+        try {
+            const res = await apiRequest('/api/config/priority-rules/chapter', 'POST', { sheet_name: name, priority: priority });
+            if (res.success) { showToast('章节添加成功', 'success'); closeAddChapterModal(); loadChapters(); }
+            else { showToast(res.error || '添加失败', 'error'); }
+        } catch (err) { showToast('添加失败', 'error'); }
+    }
+
+    function editChapter(name) {
+        const currentPriority = chaptersData[name];
+        const newPriority = prompt(`编辑章节 "${name}" 的优先级:`, currentPriority);
+        if (newPriority !== null && !isNaN(parseInt(newPriority))) { chaptersData[name] = parseInt(newPriority); saveChapters(); }
+    }
+
+    function deleteChapter(name) {
+        showConfirm('删除章节', `确定要删除章节 "${name}" 吗？`, async () => {
+            try {
+                const res = await apiRequest(`/api/config/priority-rules/chapter/${encodeURIComponent(name)}`, 'DELETE');
+                if (res.success) { showToast('章节已删除', 'success'); loadChapters(); }
+                else { showToast(res.error || '删除失败', 'error'); }
+            } catch (err) { showToast('删除失败', 'error'); }
+        });
+    }
+</script>
