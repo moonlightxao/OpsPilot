@@ -74,6 +74,7 @@ config/
 | `/api/config/priority-rules` | GET/PUT | 章节优先级 |
 | `/api/config/action-library` | GET/PUT | 操作类型配置 |
 | `/api/config/sheet-column-mapping` | GET/PUT | 列映射配置 |
+| `/api/config/batch-save` | POST | 批量保存列映射和章节排序 🆕 |
 
 ### 4.2 备份管理 API
 
@@ -88,6 +89,12 @@ config/
 | 端点 | 方法 | 功能 |
 |------|------|------|
 | `/api/upload/image` | POST | 上传图片，返回 URL |
+
+### 4.4 Excel 上传 API 🆕
+
+| 端点 | 方法 | 功能 |
+|------|------|------|
+| `/api/upload/excel/preview` | POST | 上传 Excel，返回所有 Sheet 及列名预览 |
 
 ---
 
@@ -148,10 +155,154 @@ config/backups/rules.yaml.bak.{YYYYMMDD_HHMMSS}
 - 使用 tag 形式展示别名
 - 点击 × 删除，回车添加
 
-**Excel 辅助识别** (可选功能):
+**Excel 辅助识别 - 基础功能**:
 - 上传 Excel 文件
 - 后端解析第一行表头
 - 前端展示可选列表，用户勾选映射
+
+### 6.3.1 Excel 一键保存功能（新增）
+
+**功能概述**: 上传 Excel 后，一键将所有 Sheet 列映射和章节排序保存到配置文件。
+
+**交互流程**:
+```
+[上传 Excel] → [后端解析所有 Sheet] → [前端展示预览] → [点击"保存到配置"] → [批量更新 rules.yaml]
+```
+
+**后端 API 设计**:
+
+| 端点 | 方法 | 功能 |
+|------|------|------|
+| `/api/upload/excel/preview` | POST | 上传 Excel，返回所有 Sheet 及列名预览 |
+| `/api/config/batch-save` | POST | 批量保存列映射和章节排序 |
+
+**请求/响应结构**:
+
+```python
+# POST /api/upload/excel/preview
+# 请求: multipart/form-data (file)
+# 响应:
+{
+    "sheets": [
+        {
+            "name": "上线安排",
+            "columns": ["任务名", "操作类型", "部署单元", "执行人", "复核人"],
+            "is_first_sheet": true  # 标记第一个 Sheet
+        },
+        {
+            "name": "上线代码包",
+            "columns": ["任务名", "操作类型", "部署单元", "版本号"],
+            "is_first_sheet": false
+        }
+    ],
+    "current_priority_rules": ["上线代码包", "应用配置"],  # 已存在的章节
+    "max_priority": 20  # 当前最大优先级
+}
+```
+
+```python
+# POST /api/config/batch-save
+# 请求:
+{
+    "sheets": [
+        {
+            "name": "上线代码包",
+            "columns": ["任务名", "操作类型", "部署单元", "版本号"],
+            "is_first_sheet": false
+        }
+    ]
+}
+# 响应:
+{
+    "success": true,
+    "message": "配置已保存",
+    "updated": {
+        "sheet_column_mapping": ["上线代码包"],
+        "priority_rules": ["上线代码包"]  # 新增的章节
+    }
+}
+```
+
+**保存逻辑**:
+
+```python
+def batch_save_sheets(self, sheets: list) -> dict:
+    """
+    批量保存 Sheet 配置
+
+    规则:
+    1. 第一个 Sheet (上线安排) 跳过章节排序，仅保存列映射
+    2. 其他 Sheet:
+       - 列映射: 始终更新 sheet_column_mapping
+       - 章节排序: 仅当 Sheet 名称不存在时才新增
+    3. 新增章节的优先级 = 当前最大优先级 + 10
+    """
+    config = self.load_config()
+    updated = {"sheet_column_mapping": [], "priority_rules": []}
+
+    # 获取当前最大优先级
+    max_priority = max(
+        [p.get("priority", 0) for p in config.get("priority_rules", [])],
+        default=0
+    )
+
+    for sheet in sheets:
+        name = sheet["name"]
+        columns = sheet["columns"]
+        is_first = sheet.get("is_first_sheet", False)
+
+        # 1. 更新列映射（列名同时作为标准列名和别名）
+        column_mapping = {col: [col] for col in columns}
+        config["sheet_column_mapping"][name] = column_mapping
+        updated["sheet_column_mapping"].append(name)
+
+        # 2. 更新章节排序（仅非第一个 Sheet 且不存在时）
+        if not is_first:
+            existing_names = [r.get("sheet_name") for r in config.get("priority_rules", [])]
+            if name not in existing_names:
+                max_priority += 10
+                config["priority_rules"].append({
+                    "sheet_name": name,
+                    "priority": max_priority
+                })
+                updated["priority_rules"].append(name)
+
+    self.save_config(config)
+    return updated
+```
+
+**前端交互设计**:
+
+```html
+<!-- Excel 上传预览区域 -->
+<div id="excel-preview" class="hidden">
+    <h3>Excel 预览</h3>
+    <div id="sheets-list">
+        <!-- 动态生成 Sheet 卡片 -->
+    </div>
+    <button id="btn-batch-save" class="btn-primary">
+        保存到配置
+    </button>
+</div>
+```
+
+**UI 展示结构**:
+```
+┌─────────────────────────────────────────────────────────┐
+│  Excel 预览                                              │
+├─────────────────────────────────────────────────────────┤
+│  📋 上线安排 (第一个 Sheet - 仅更新列映射)               │
+│     列: 任务名, 操作类型, 部署单元, 执行人, 复核人        │
+├─────────────────────────────────────────────────────────┤
+│  📋 上线代码包 (将新增到章节排序, 优先级: 30)            │
+│     列: 任务名, 操作类型, 部署单元, 版本号               │
+├─────────────────────────────────────────────────────────┤
+│  📋 应用配置 (已存在 - 仅更新列映射)                     │
+│     列: 任务名, 操作类型, 配置项, 配置值                 │
+├─────────────────────────────────────────────────────────┤
+│                          [保存到配置]                    │
+└─────────────────────────────────────────────────────────┘
+```
 
 ### 6.4 配置版本管理
 
@@ -273,6 +424,13 @@ werkzeug>=3.0.0    # Flask 依赖，用于文件上传
 - [ ] **W2.4** 实现列映射配置页面
 - [ ] **W2.5** 实现图片上传 API
 
+### 阶段 2.6: Excel 一键保存功能 (Owner: Developer) 🆕
+- [ ] **W2.6.1** 实现 `/api/upload/excel/preview` API - 解析 Excel 返回所有 Sheet 和列名
+- [ ] **W2.6.2** 实现 `/api/config/batch-save` API - 批量保存列映射和章节排序
+- [ ] **W2.6.3** 扩展 `ConfigService` 添加 `batch_save_sheets` 方法
+- [ ] **W2.6.4** 前端实现 Excel 预览 UI（Sheet 卡片列表）
+- [ ] **W2.6.5** 前端实现"保存到配置"按钮及交互逻辑
+
 ### 阶段 3: 高级功能 (Owner: Developer)
 - [ ] **W3.1** 实现配置保存与备份逻辑
 - [ ] **W3.2** 实现版本回滚功能
@@ -296,6 +454,7 @@ werkzeug>=3.0.0    # Flask 依赖，用于文件上传
 | 章节排序配置 | 新增必填优先级，拖拽自动重算，保存正确更新 rules.yaml |
 | 操作类型配置 | 富文本支持图片，高危弹窗正常，图片保存至 `config/images/` |
 | 列映射配置 | 手动输入正常，Excel 辅助识别可选 |
+| Excel 一键保存 | 点击"保存到配置"后，所有 Sheet 列映射自动创建/更新；除第一个 Sheet 外自动添加章节排序；已存在 Sheet 不重复添加；优先级自动递增；Toast 提示显示 |
 | 配置保存与回滚 | 备份格式正确，最多 10 条，回滚需二次确认 |
 | 通用交互 | 必填校验、删除确认、Toast 提示、YAML 预览 |
 
@@ -311,6 +470,8 @@ werkzeug>=3.0.0    # Flask 依赖，用于文件上传
 
 ---
 
-**文档版本**: v1.0
+**文档版本**: v1.1
 **创建日期**: 2026-02-25
+**更新日期**: 2026-02-25
 **创建者**: Architect
+**更新说明**: 新增 6.3.1 Excel 一键保存功能技术方案
