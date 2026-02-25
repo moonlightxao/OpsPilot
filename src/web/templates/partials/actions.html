@@ -6,17 +6,52 @@
                 + 新增操作类型
             </button>
         </div>
-        <p class="text-gray-500 text-sm mb-4">配置操作类型及其操作说明，支持富文本编辑。</p>
-        <div id="actions-list" class="space-y-4">
-            <p class="text-gray-500">加载中...</p>
+        <p class="text-gray-500 text-sm mb-4">操作类型与章节绑定，每个章节拥有独立的操作类型配置。</p>
+        
+        <div class="flex gap-6">
+            <!-- 左侧章节列表 -->
+            <div class="w-1/4 border-r pr-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h4 class="font-medium text-gray-700">章节列表</h4>
+                    <button onclick="showAddChapterForActions()" class="text-sm text-primary hover:text-blue-700">
+                        + 新增
+                    </button>
+                </div>
+                <div id="chapter-list-for-actions" class="space-y-1">
+                    <p class="text-gray-500 text-sm">加载中...</p>
+                </div>
+            </div>
+            
+            <!-- 右侧操作类型列表 -->
+            <div class="flex-1">
+                <div class="flex justify-between items-center mb-3">
+                    <h4 class="font-medium text-gray-700">
+                        当前章节：<span id="current-chapter-name" class="text-primary">-</span>
+                    </h4>
+                    <div id="batch-actions-bar" class="hidden items-center gap-2">
+                        <span class="text-sm text-gray-500">已选择 <span id="selected-count">0</span> 项</span>
+                        <button onclick="batchDeleteActions()" id="batch-delete-btn" class="px-3 py-1 bg-danger text-white text-sm rounded hover:bg-red-600 disabled:opacity-50" disabled>
+                            批量删除
+                        </button>
+                    </div>
+                </div>
+                <div id="actions-list" class="space-y-3">
+                    <p class="text-gray-500">请选择章节</p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
+<!-- 操作类型编辑弹窗 -->
 <div id="action-modal" class="modal-overlay hidden">
     <div class="modal-content p-6" style="max-width: 700px;">
         <h3 class="text-lg font-semibold mb-4" id="action-modal-title">新增操作类型</h3>
         <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">所属章节</label>
+                <input type="text" id="action-chapter" class="w-full border rounded px-3 py-2 bg-gray-50" readonly>
+            </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">操作名称 *</label>
                 <input type="text" id="action-name" class="w-full border rounded px-3 py-2" placeholder="如：新增、修改、删除">
@@ -47,47 +82,168 @@
     </div>
 </div>
 
+<!-- 新增章节弹窗 -->
+<div id="add-chapter-for-actions-modal" class="modal-overlay hidden">
+    <div class="modal-content p-6">
+        <h3 class="text-lg font-semibold mb-4">新增章节</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">章节名称 *</label>
+                <input type="text" id="new-action-chapter-name" class="w-full border rounded px-3 py-2" placeholder="如：应用配置、容器配置">
+            </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button onclick="closeAddChapterForActionsModal()" class="px-4 py-2 border rounded hover:bg-gray-50">取消</button>
+            <button onclick="addChapterForActions()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">添加</button>
+        </div>
+    </div>
+</div>
+
 <script>
-    let actionsData = {};
+    // 状态管理
+    let actionLibrary = {};
+    let chaptersList = [];
+    let currentChapter = null;
     let editingAction = null;
+    let selectedActions = new Set();
 
-    document.addEventListener('DOMContentLoaded', function() { loadActions(); setActiveNav('actions'); });
+    document.addEventListener('DOMContentLoaded', function() {
+        loadChaptersList();
+        setActiveNav('actions');
+    });
 
-    async function loadActions() {
+    // 加载章节列表
+    async function loadChaptersList() {
         try {
-            const res = await apiRequest('/api/config/action-library');
-            if (res.success) { actionsData = res.data; renderActions(); }
-            else { showToast('加载操作类型失败', 'error'); }
-        } catch (err) { showToast('加载操作类型失败', 'error'); }
+            const res = await apiRequest('/api/config/priority-rules');
+            if (res.success) {
+                chaptersList = Object.keys(res.data).sort((a, b) => res.data[a] - res.data[b]);
+                renderChapterList();
+            }
+            
+            // 同时加载操作类型库
+            const libRes = await apiRequest('/api/config/action-library');
+            if (libRes.success) {
+                actionLibrary = libRes.data;
+            }
+        } catch (err) {
+            showToast('加载章节列表失败', 'error');
+        }
     }
 
+    // 渲染章节列表
+    function renderChapterList() {
+        const container = document.getElementById('chapter-list-for-actions');
+        
+        if (chaptersList.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">暂无章节，请先添加章节</p>';
+            return;
+        }
+        
+        container.innerHTML = chaptersList.map(chapter => {
+            const actionCount = Object.keys(actionLibrary[chapter] || {}).length;
+            const isActive = currentChapter === chapter;
+            return `
+                <div class="p-2 rounded cursor-pointer flex justify-between items-center ${isActive ? 'bg-blue-50 text-primary' : 'hover:bg-gray-50'}"
+                     onclick="selectChapter('${chapter}')">
+                    <span class="truncate">${chapter}</span>
+                    <span class="text-xs text-gray-400">${actionCount}</span>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // 选择章节
+    function selectChapter(chapter) {
+        currentChapter = chapter;
+        selectedActions.clear();
+        updateBatchActionsUI();
+        document.getElementById('current-chapter-name').textContent = chapter;
+        renderChapterList();
+        renderActions();
+    }
+
+    // 渲染操作类型列表
     function renderActions() {
         const container = document.getElementById('actions-list');
-        const entries = Object.entries(actionsData);
-        if (entries.length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无操作类型配置</p>'; return; }
-        container.innerHTML = entries.map(([name, config]) => `
-            <div class="border rounded-lg p-4 ${config.is_high_risk ? 'border-red-300 bg-red-50' : ''}">
-                <div class="flex justify-between items-start">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">${name}</span>
-                            ${config.is_high_risk ? '<span class="px-2 py-0.5 bg-red-500 text-white text-xs rounded">高危</span>' : ''}
+        
+        if (!currentChapter) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">请从左侧选择章节</p>';
+            return;
+        }
+        
+        const actions = actionLibrary[currentChapter] || {};
+        const entries = Object.entries(actions);
+        
+        if (entries.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">该章节暂无操作类型，点击"新增操作类型"添加</p>';
+            return;
+        }
+        
+        container.innerHTML = entries.map(([name, config]) => {
+            const isSelected = selectedActions.has(name);
+            return `
+                <div class="border rounded-lg p-4 ${config.is_high_risk ? 'border-red-300 bg-red-50' : ''} ${isSelected ? 'ring-2 ring-primary' : ''}">
+                    <div class="flex items-start gap-3">
+                        <input type="checkbox" class="mt-1" ${isSelected ? 'checked' : ''} 
+                               onchange="toggleActionSelection('${name}')">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium">${name}</span>
+                                ${config.is_high_risk ? '<span class="px-2 py-0.5 bg-red-500 text-white text-xs rounded">高危</span>' : ''}
+                            </div>
+                            <p class="text-sm text-gray-600 mt-1">${config.instruction || '无操作说明'}</p>
+                            <p class="text-xs text-gray-400 mt-1">渲染表格: ${config.render_table ? '是' : '否'}</p>
                         </div>
-                        <p class="text-sm text-gray-600 mt-1">${config.instruction || '无操作说明'}</p>
-                        <p class="text-xs text-gray-400 mt-1">渲染表格: ${config.render_table ? '是' : '否'}</p>
-                    </div>
-                    <div class="flex gap-2">
-                        <button onclick="editAction('${name}')" class="text-primary hover:text-blue-700">编辑</button>
-                        <button onclick="deleteAction('${name}')" class="text-danger hover:text-red-700">删除</button>
+                        <div class="flex gap-2">
+                            <button onclick="editAction('${name}')" class="text-primary hover:text-blue-700">编辑</button>
+                            <button onclick="deleteSingleAction('${name}')" class="text-danger hover:text-red-700">删除</button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
+    // 切换操作类型选择状态
+    function toggleActionSelection(actionName) {
+        if (selectedActions.has(actionName)) {
+            selectedActions.delete(actionName);
+        } else {
+            selectedActions.add(actionName);
+        }
+        updateBatchActionsUI();
+        renderActions();
+    }
+
+    // 更新批量操作 UI
+    function updateBatchActionsUI() {
+        const count = selectedActions.size;
+        const bar = document.getElementById('batch-actions-bar');
+        const countEl = document.getElementById('selected-count');
+        const btn = document.getElementById('batch-delete-btn');
+        
+        if (count > 0) {
+            bar.classList.remove('hidden');
+            bar.style.display = 'flex';
+            countEl.textContent = count;
+            btn.disabled = false;
+        } else {
+            bar.classList.add('hidden');
+            bar.style.display = '';
+            btn.disabled = true;
+        }
+    }
+
+    // 显示新增操作类型弹窗
     function showAddActionModal() {
+        if (!currentChapter) {
+            showToast('请先选择章节', 'error');
+            return;
+        }
         editingAction = null;
         document.getElementById('action-modal-title').textContent = '新增操作类型';
+        document.getElementById('action-chapter').value = currentChapter;
         document.getElementById('action-name').value = '';
         document.getElementById('action-instruction').value = '';
         document.getElementById('action-high-risk').checked = false;
@@ -97,18 +253,24 @@
         document.getElementById('action-modal').classList.remove('hidden');
     }
 
-    function closeActionModal() { document.getElementById('action-modal').classList.add('hidden'); }
+    function closeActionModal() {
+        document.getElementById('action-modal').classList.add('hidden');
+    }
 
     function toggleHighRiskNote() {
         const isHighRisk = document.getElementById('action-high-risk').checked;
         document.getElementById('high-risk-note-section').classList.toggle('hidden', !isHighRisk);
     }
 
+    // 编辑操作类型
     function editAction(name) {
-        const config = actionsData[name];
+        const actions = actionLibrary[currentChapter] || {};
+        const config = actions[name];
         if (!config) return;
+        
         editingAction = name;
         document.getElementById('action-modal-title').textContent = '编辑操作类型';
+        document.getElementById('action-chapter').value = currentChapter;
         document.getElementById('action-name').value = name;
         document.getElementById('action-instruction').value = config.instruction || '';
         document.getElementById('action-high-risk').checked = config.is_high_risk || false;
@@ -118,29 +280,135 @@
         document.getElementById('action-modal').classList.remove('hidden');
     }
 
+    // 保存操作类型
     async function saveAction() {
         const name = document.getElementById('action-name').value.trim();
-        if (!name) { showToast('请输入操作名称', 'error'); return; }
+        if (!name) {
+            showToast('请输入操作名称', 'error');
+            return;
+        }
+        
         const actionConfig = {
             instruction: document.getElementById('action-instruction').value.trim(),
             is_high_risk: document.getElementById('action-high-risk').checked,
             render_table: document.getElementById('action-render-table').checked,
             high_risk_note: document.getElementById('action-high-risk-note').value.trim() || null
         };
+        
         try {
-            const res = await apiRequest(`/api/config/action-library/${encodeURIComponent(name)}`, 'PUT', actionConfig);
-            if (res.success) { showToast('操作类型保存成功', 'success'); closeActionModal(); loadActions(); }
-            else { showToast(res.error || '保存失败', 'error'); }
-        } catch (err) { showToast('保存失败', 'error'); }
+            // 如果是编辑且名称改变，先删除旧的
+            if (editingAction && editingAction !== name) {
+                await apiRequest(`/api/config/action-library/chapter/${encodeURIComponent(currentChapter)}/${encodeURIComponent(editingAction)}`, 'DELETE');
+            }
+            
+            const res = await apiRequest(`/api/config/action-library/chapter/${encodeURIComponent(currentChapter)}/${encodeURIComponent(name)}`, 'PUT', actionConfig);
+            if (res.success) {
+                showToast('操作类型保存成功', 'success');
+                closeActionModal();
+                await loadActionLibrary();
+                renderActions();
+            } else {
+                showToast(res.error || '保存失败', 'error');
+            }
+        } catch (err) {
+            showToast('保存失败', 'error');
+        }
     }
 
-    function deleteAction(name) {
+    // 重新加载操作类型库
+    async function loadActionLibrary() {
+        try {
+            const res = await apiRequest('/api/config/action-library');
+            if (res.success) {
+                actionLibrary = res.data;
+                renderChapterList();
+            }
+        } catch (err) {
+            console.error('加载操作类型库失败', err);
+        }
+    }
+
+    // 删除单个操作类型
+    function deleteSingleAction(name) {
         showConfirm('删除操作类型', `确定要删除操作类型 "${name}" 吗？`, async () => {
             try {
-                const res = await apiRequest(`/api/config/action-library/${encodeURIComponent(name)}`, 'DELETE');
-                if (res.success) { showToast('操作类型已删除', 'success'); loadActions(); }
-                else { showToast(res.error || '删除失败', 'error'); }
-            } catch (err) { showToast('删除失败', 'error'); }
+                const res = await apiRequest(`/api/config/action-library/chapter/${encodeURIComponent(currentChapter)}/${encodeURIComponent(name)}`, 'DELETE');
+                if (res.success) {
+                    showToast('操作类型已删除', 'success');
+                    selectedActions.delete(name);
+                    await loadActionLibrary();
+                    renderActions();
+                    updateBatchActionsUI();
+                } else {
+                    showToast(res.error || '删除失败', 'error');
+                }
+            } catch (err) {
+                showToast('删除失败', 'error');
+            }
         });
+    }
+
+    // 批量删除操作类型
+    function batchDeleteActions() {
+        const count = selectedActions.size;
+        if (count === 0) return;
+        
+        const names = Array.from(selectedActions);
+        showConfirm('批量删除确认', `确定要删除选中的 ${count} 个操作类型吗？此操作不可撤销。`, async () => {
+            try {
+                const res = await apiRequest('/api/config/action-library/batch-delete', 'POST', {
+                    chapter: currentChapter,
+                    action_names: names
+                });
+                if (res.success) {
+                    showToast(`已删除 ${res.deleted.length} 个操作类型`, 'success');
+                    selectedActions.clear();
+                    await loadActionLibrary();
+                    renderActions();
+                    updateBatchActionsUI();
+                } else {
+                    showToast(res.error || '删除失败', 'error');
+                }
+            } catch (err) {
+                showToast('删除失败', 'error');
+            }
+        });
+    }
+
+    // 新增章节弹窗
+    function showAddChapterForActions() {
+        document.getElementById('add-chapter-for-actions-modal').classList.remove('hidden');
+        document.getElementById('new-action-chapter-name').value = '';
+    }
+
+    function closeAddChapterForActionsModal() {
+        document.getElementById('add-chapter-for-actions-modal').classList.add('hidden');
+    }
+
+    async function addChapterForActions() {
+        const name = document.getElementById('new-action-chapter-name').value.trim();
+        if (!name) {
+            showToast('请输入章节名称', 'error');
+            return;
+        }
+        
+        // 计算新章节的优先级
+        const priority = (chaptersList.length + 1) * 10;
+        
+        try {
+            const res = await apiRequest('/api/config/priority-rules/chapter', 'POST', {
+                sheet_name: name,
+                priority: priority
+            });
+            if (res.success) {
+                showToast('章节添加成功', 'success');
+                closeAddChapterForActionsModal();
+                await loadChaptersList();
+            } else {
+                showToast(res.error || '添加失败', 'error');
+            }
+        } catch (err) {
+            showToast('添加失败', 'error');
+        }
     }
 </script>

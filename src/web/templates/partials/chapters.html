@@ -2,11 +2,19 @@
     <div class="bg-white rounded-lg shadow p-6">
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold">章节优先级配置</h3>
-            <button onclick="showAddChapterModal()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">
-                + 新增章节
-            </button>
+            <div class="flex gap-2">
+                <div id="batch-chapters-bar" class="hidden items-center gap-2 mr-2">
+                    <span class="text-sm text-gray-500">已选择 <span id="chapters-selected-count">0</span> 项</span>
+                    <button onclick="batchDeleteChapters()" id="batch-delete-chapters-btn" class="px-3 py-1 bg-danger text-white text-sm rounded hover:bg-red-600">
+                        批量删除
+                    </button>
+                </div>
+                <button onclick="showAddChapterModal()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">
+                    + 新增章节
+                </button>
+            </div>
         </div>
-        <p class="text-gray-500 text-sm mb-4">拖拽调整章节顺序，数值越小越优先。配置将影响 Word 文档的输出顺序。</p>
+        <p class="text-gray-500 text-sm mb-4">拖拽调整章节顺序，数值越小越优先。勾选后可批量删除。</p>
         <div id="chapters-list" class="space-y-2">
             <p class="text-gray-500">加载中...</p>
         </div>
@@ -36,12 +44,21 @@
 
 <script>
     let chaptersData = {};
-    document.addEventListener('DOMContentLoaded', function() { loadChapters(); setActiveNav('chapters'); });
+    let selectedChapters = new Set();
+    
+    document.addEventListener('DOMContentLoaded', function() { 
+        loadChapters(); 
+        setActiveNav('chapters'); 
+    });
 
     async function loadChapters() {
         try {
             const res = await apiRequest('/api/config/priority-rules');
-            if (res.success) { chaptersData = res.data; renderChapters(); initSortable(); }
+            if (res.success) { 
+                chaptersData = res.data; 
+                renderChapters(); 
+                initSortable(); 
+            }
             else { showToast('加载章节配置失败', 'error'); }
         } catch (err) { showToast('加载章节配置失败', 'error'); }
     }
@@ -49,24 +66,36 @@
     function renderChapters() {
         const container = document.getElementById('chapters-list');
         const sorted = Object.entries(chaptersData).sort((a, b) => a[1] - b[1]);
-        if (sorted.length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无章节配置</p>'; return; }
-        container.innerHTML = sorted.map(([name, priority]) => `
-            <div class="flex items-center bg-gray-50 rounded p-3 cursor-move" data-name="${name}" data-priority="${priority}">
-                <div class="mr-3 text-gray-400">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+        if (sorted.length === 0) { 
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无章节配置</p>'; 
+            return; 
+        }
+        container.innerHTML = sorted.map(([name, priority]) => {
+            const isSelected = selectedChapters.has(name);
+            return `
+                <div class="flex items-center bg-gray-50 rounded p-3 ${isSelected ? 'ring-2 ring-primary bg-blue-50' : ''}" 
+                     data-name="${name}" data-priority="${priority}">
+                    <input type="checkbox" class="mr-3" ${isSelected ? 'checked' : ''} 
+                           onchange="toggleChapterSelection('${name}')">
+                    <div class="mr-3 text-gray-400 cursor-move drag-handle">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+                    </div>
+                    <span class="flex-1 font-medium">${name}</span>
+                    <span class="text-sm text-gray-500 mr-4">优先级: ${priority}</span>
+                    <button onclick="editChapter('${name}')" class="text-primary hover:text-blue-700 mr-2">编辑</button>
+                    <button onclick="deleteChapter('${name}')" class="text-danger hover:text-red-700">删除</button>
                 </div>
-                <span class="flex-1 font-medium">${name}</span>
-                <span class="text-sm text-gray-500 mr-4">优先级: ${priority}</span>
-                <button onclick="editChapter('${name}')" class="text-primary hover:text-blue-700 mr-2">编辑</button>
-                <button onclick="deleteChapter('${name}')" class="text-danger hover:text-red-700">删除</button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     function initSortable() {
         const container = document.getElementById('chapters-list');
         new Sortable(container, {
-            animation: 150, ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen',
+            animation: 150, 
+            ghostClass: 'sortable-ghost', 
+            chosenClass: 'sortable-chosen',
+            handle: '.drag-handle',
             onEnd: function() {
                 const items = container.querySelectorAll('[data-name]');
                 const newPriorities = {};
@@ -85,7 +114,68 @@
         } catch (err) { showToast('保存失败', 'error'); }
     }
 
-    function showAddChapterModal() { document.getElementById('add-chapter-modal').classList.remove('hidden'); document.getElementById('new-chapter-name').value = ''; document.getElementById('new-chapter-priority').value = ''; }
+    // 切换章节选择状态
+    function toggleChapterSelection(name) {
+        if (selectedChapters.has(name)) {
+            selectedChapters.delete(name);
+        } else {
+            selectedChapters.add(name);
+        }
+        updateBatchChaptersUI();
+        renderChapters();
+    }
+
+    // 更新批量操作 UI
+    function updateBatchChaptersUI() {
+        const count = selectedChapters.size;
+        const bar = document.getElementById('batch-chapters-bar');
+        const countEl = document.getElementById('chapters-selected-count');
+        
+        if (count > 0) {
+            bar.classList.remove('hidden');
+            bar.style.display = 'flex';
+            countEl.textContent = count;
+        } else {
+            bar.classList.add('hidden');
+            bar.style.display = '';
+        }
+    }
+
+    // 批量删除章节
+    function batchDeleteChapters() {
+        const count = selectedChapters.size;
+        if (count === 0) return;
+        
+        const names = Array.from(selectedChapters);
+        showConfirm('批量删除确认', `确定要删除选中的 ${count} 个章节吗？此操作不可撤销。`, async () => {
+            try {
+                const res = await apiRequest('/api/config/priority-rules/batch-delete', 'POST', {
+                    sheet_names: names
+                });
+                if (res.success) {
+                    showToast(`已删除 ${res.deleted.length} 个章节`, 'success');
+                    selectedChapters.clear();
+                    updateBatchChaptersUI();
+                    loadChapters();
+                } else {
+                    showToast(res.error || '删除失败', 'error');
+                }
+            } catch (err) {
+                showToast('删除失败', 'error');
+            }
+        });
+    }
+
+    function showAddChapterModal() { 
+        document.getElementById('add-chapter-modal').classList.remove('hidden'); 
+        document.getElementById('new-chapter-name').value = ''; 
+        
+        // 计算默认优先级
+        const sorted = Object.entries(chaptersData).sort((a, b) => b[1] - a[1]);
+        const defaultPriority = sorted.length > 0 ? sorted[0][1] + 10 : 10;
+        document.getElementById('new-chapter-priority').value = defaultPriority;
+    }
+    
     function closeAddChapterModal() { document.getElementById('add-chapter-modal').classList.add('hidden'); }
 
     async function addChapter() {
@@ -103,14 +193,22 @@
     function editChapter(name) {
         const currentPriority = chaptersData[name];
         const newPriority = prompt(`编辑章节 "${name}" 的优先级:`, currentPriority);
-        if (newPriority !== null && !isNaN(parseInt(newPriority))) { chaptersData[name] = parseInt(newPriority); saveChapters(); }
+        if (newPriority !== null && !isNaN(parseInt(newPriority))) { 
+            chaptersData[name] = parseInt(newPriority); 
+            saveChapters(); 
+        }
     }
 
     function deleteChapter(name) {
         showConfirm('删除章节', `确定要删除章节 "${name}" 吗？`, async () => {
             try {
                 const res = await apiRequest(`/api/config/priority-rules/chapter/${encodeURIComponent(name)}`, 'DELETE');
-                if (res.success) { showToast('章节已删除', 'success'); loadChapters(); }
+                if (res.success) { 
+                    showToast('章节已删除', 'success'); 
+                    selectedChapters.delete(name);
+                    updateBatchChaptersUI();
+                    loadChapters(); 
+                }
                 else { showToast(res.error || '删除失败', 'error'); }
             } catch (err) { showToast('删除失败', 'error'); }
         });
