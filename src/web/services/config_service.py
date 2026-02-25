@@ -241,3 +241,71 @@ class ConfigService:
         full_config = self.load()
         full_config['implementation_summary'] = config
         self.save(full_config)
+
+    # ========== 批量保存相关 ==========
+
+    def batch_save_sheets(self, sheets: list) -> dict:
+        """
+        批量保存 Sheet 配置（用于 Excel 一键保存功能）
+
+        规则：
+        1. 第一个 Sheet (上线安排) 跳过章节排序，仅保存列映射
+        2. 其他 Sheet：
+           - 列映射：始终更新 sheet_column_mapping
+           - 章节排序：仅当 Sheet 名称不存在时才新增
+        3. 新增章节的优先级 = 当前最大优先级 + 10
+
+        Args:
+            sheets: Sheet 列表，每个元素包含 name, columns, is_first_sheet
+
+        Returns:
+            更新结果 {"sheet_column_mapping": [...], "priority_rules": [...]}
+        """
+        config = self.load()
+        updated = {"sheet_column_mapping": [], "priority_rules": []}
+
+        # 确保 sheet_column_mapping 存在
+        if "sheet_column_mapping" not in config:
+            config["sheet_column_mapping"] = {}
+
+        # 确保 priority_rules 存在且为 dict
+        if "priority_rules" not in config:
+            config["priority_rules"] = {}
+
+        # 获取当前最大优先级
+        priority_rules = config.get("priority_rules", {})
+        if isinstance(priority_rules, dict) and priority_rules:
+            max_priority = max(priority_rules.values())
+        else:
+            max_priority = 0
+            # 如果 priority_rules 不是 dict，重置为 dict
+            if not isinstance(priority_rules, dict):
+                config["priority_rules"] = {}
+                priority_rules = {}
+
+        for sheet in sheets:
+            name = sheet.get("name")
+            columns = sheet.get("columns", [])
+            is_first = sheet.get("is_first_sheet", False)
+
+            if not name:
+                continue
+
+            # 1. 更新列映射（列名同时作为标准列名和别名）
+            column_mapping = {col: [col] for col in columns}
+            config["sheet_column_mapping"][name] = {
+                "columns": columns,
+                "column_mapping": column_mapping
+            }
+            updated["sheet_column_mapping"].append(name)
+
+            # 2. 更新章节排序（仅非第一个 Sheet 且不存在时）
+            if not is_first:
+                if name not in priority_rules:
+                    max_priority += 10
+                    config["priority_rules"][name] = max_priority
+                    priority_rules[name] = max_priority
+                    updated["priority_rules"].append(name)
+
+        self.save(config)
+        return updated

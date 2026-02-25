@@ -1,10 +1,10 @@
 # 🚀 OpsPilot 项目执行看板
 
 ## 📊 总体进度状态
-- **当前阶段**: Web 配置中心开发完成
+- **当前阶段**: Excel 一键保存功能开发完成
 - **完成度**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
-- **项目健康度**: 🟢 M6 里程碑完成，Web 配置中心已上线
-- **更新日期**: 2026-02-25
+- **项目健康度**: 🟢 M6 里程碑完成，Web 配置中心 + Excel 一键保存已上线
+- **更新日期**: 2026-02-26
 
 ---
 
@@ -162,6 +162,13 @@ fastmcp>=0.1.0
 - [x] **W3.3 YAML 预览**：实现 YAML 格式预览功能 ✅ 2026-02-25
 - [x] **W3.4 表单校验**：实现表单校验与 Toast 提示 ✅ 2026-02-25
 
+### 2.8 Excel 一键保存功能 (Owner: Developer) 🆕
+- [x] **W2.6.1 Excel 预览 API**：实现 `/api/upload/excel/preview` - 解析 Excel 返回所有 Sheet 和列名 ✅ 2026-02-26
+- [x] **W2.6.2 批量保存 API**：实现 `/api/config/batch-save` - 批量保存列映射和章节排序 ✅ 2026-02-26
+- [x] **W2.6.3 ConfigService 扩展**：添加 `batch_save_sheets` 方法 ✅ 2026-02-26
+- [x] **W2.6.4 前端预览 UI**：Excel 预览界面（Sheet 卡片列表） ✅ 2026-02-26
+- [x] **W2.6.5 保存按钮交互**：前端"保存到配置"按钮及交互逻辑 ✅ 2026-02-26
+
 ### 3. 质量保障 (Owner: Tester)
 - [x] **单元测试**：Parser 30/30 通过，Renderer 22/22 全部通过 ✅ 2026-02-18
 - [x] **边界测试**：空文件、缺失字段、非法字符处理已覆盖 ✅ 2026-02-18
@@ -233,6 +240,9 @@ fastmcp>=0.1.0
 - **2026-02-25 [PM]** 需求移交：Web 配置中心需求细化完成，待 Architect 进行技术方案设计 | 产出物：OpsPilot_PRD.md 3.4 节、6.2 节
 - **2026-02-25 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_WEB_CONFIG.md`，定义技术选型、目录结构、API 设计、任务拆解 | 产出物：TECH_DESIGN_WEB_CONFIG.md
 - **2026-02-25 [Developer]** Web 配置中心开发完成：实现 Flask 应用工厂、ConfigService/BackupService、配置管理 API、章节排序/操作类型/列映射页面、图片上传、版本回滚、YAML 预览 | 14 项任务全部完成 | 产出物：src/web/
+- **2026-02-25 [PM]** 需求细化：Excel 辅助识别新增「一键保存」功能，自动保存 Sheet 列映射并填充章节排序 | 更新 OpsPilot_PRD.md 3.4.3-C 节、6.2 节 | 待 Architect 技术方案设计
+- **2026-02-25 [Architect]** 技术方案设计完成：产出 TECH_DESIGN_WEB_CONFIG.md v1.1，新增 6.3.1 Excel 一键保存功能方案 | 定义 2 个新 API、5 项开发任务 | 产出物：TECH_DESIGN_WEB_CONFIG.md
+- **2026-02-26 [Developer]** Excel 一键保存功能完成：实现 `/api/upload/excel/preview` 预览 API、`/api/config/batch-save` 批量保存 API、ConfigService.batch_save_sheets 方法、前端预览 UI 和保存交互 | 5 项任务全部完成 | 产出物：src/web/routes/upload.py、src/web/routes/config.py、src/web/services/config_service.py、src/web/templates/partials/columns.html
 
 ---
 
@@ -254,6 +264,7 @@ fastmcp>=0.1.0
 │                      config/rules.yaml (规则库)                         │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                      src/web/ (Web 配置中心) ✅ 完成                     │
+│                      ├── Excel 一键保存 🆕 待开发                        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -317,13 +328,14 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 
 ## 📣 下一步指派
 
-**项目状态**: 🟢 Web 配置中心开发完成，项目进入验收阶段
+**项目状态**: 🟢 Excel 一键保存功能开发完成，项目进入验收阶段
 
 ### 致 Developer
-**已完成** ✅ 2026-02-25
+**已完成** ✅ 2026-02-26
 - **W1 阶段（基础框架）**：创建 `src/web/` 目录结构、Flask 应用工厂、ConfigService/BackupService、main.py web 命令
 - **W2 阶段（核心页面）**：章节排序、操作类型、列映射配置页面、图片上传 API
 - **W3 阶段（高级功能）**：配置保存、版本回滚、YAML 预览、表单校验
+- **W2.6 阶段（Excel 一键保存）**：Excel 预览 API、批量保存 API、ConfigService 扩展、前端预览 UI、保存按钮交互
 
 **产出物**:
 - `src/web/` - Web 配置中心完整实现
@@ -338,7 +350,7 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 ### 致 PM
 **待验收** (M6 里程碑)
 - 启动验证：`python main.py web`
-- 功能验收：章节排序、操作类型、列映射、版本回滚
+- 功能验收：章节排序、操作类型、列映射、版本回滚、Excel 一键保存
 
 ---
 

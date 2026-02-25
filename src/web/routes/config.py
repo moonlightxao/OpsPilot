@@ -244,3 +244,56 @@ def delete_sheet_mapping(sheet_name: str):
         return jsonify({"success": False, "error": "Sheet 配置不存在"}), 404
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ========== 批量保存（Excel 一键保存） ==========
+
+@config_bp.route('/batch-save', methods=['POST'])
+def batch_save_sheets():
+    """
+    批量保存 Sheet 配置（用于 Excel 一键保存功能）
+
+    请求体:
+        {
+            "sheets": [
+                {"name": "Sheet1", "columns": [...], "is_first_sheet": true},
+                {"name": "Sheet2", "columns": [...], "is_first_sheet": false}
+            ]
+        }
+
+    响应:
+        {
+            "success": true,
+            "message": "配置已保存",
+            "updated": {
+                "sheet_column_mapping": ["Sheet1", "Sheet2"],
+                "priority_rules": ["Sheet2"]
+            }
+        }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "请求数据不能为空"}), 400
+
+        sheets = data.get('sheets', [])
+        if not isinstance(sheets, list):
+            return jsonify({"success": False, "error": "sheets 格式错误"}), 400
+
+        if not sheets:
+            return jsonify({"success": False, "error": "sheets 不能为空"}), 400
+
+        # 创建备份
+        from ..services import BackupService
+        BackupService().create_backup()
+
+        # 执行批量保存
+        updated = config_service.batch_save_sheets(sheets)
+
+        return jsonify({
+            "success": True,
+            "message": "配置已保存",
+            "updated": updated
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

@@ -3,7 +3,10 @@
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold">Sheet 列映射配置</h3>
             <div class="flex gap-2">
-                <button onclick="showExcelUploadModal()" class="px-4 py-2 border rounded hover:bg-gray-50">
+                <button onclick="showBatchSaveModal()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                    Excel 一键保存
+                </button>
+                <button onclick="showExcelIdentifyModal()" class="px-4 py-2 border rounded hover:bg-gray-50">
                     Excel 辅助识别
                 </button>
                 <button onclick="showAddSheetModal()" class="px-4 py-2 bg-primary text-white rounded hover:bg-blue-600">
@@ -19,7 +22,7 @@
 </div>
 
 <div id="sheet-modal" class="modal-overlay hidden">
-    <div class="modal-content p-6" style="max-width: 700px;">
+    <div class="modal-content p-6 modal-xl">
         <h3 class="text-lg font-semibold mb-4" id="sheet-modal-title">新增 Sheet 映射</h3>
         <div class="space-y-4">
             <div>
@@ -42,17 +45,50 @@
     </div>
 </div>
 
-<div id="excel-upload-modal" class="modal-overlay hidden">
-    <div class="modal-content p-6">
+<!-- Excel 辅助识别弹窗 -->
+<div id="excel-identify-modal" class="modal-overlay hidden">
+    <div class="modal-content p-6 modal-lg">
         <h3 class="text-lg font-semibold mb-4">Excel 辅助识别</h3>
-        <p class="text-gray-500 text-sm mb-4">上传 Excel 文件，自动识别第一行的列名。</p>
-        <input type="file" id="excel-file" accept=".xlsx,.xls" class="w-full border rounded px-3 py-2 mb-4">
-        <div id="excel-columns-result" class="hidden">
-            <label class="block text-sm font-medium text-gray-700 mb-2">识别到的列名（点击复制）：</label>
-            <div id="excel-columns-list" class="flex flex-wrap gap-2"></div>
+        <p class="text-gray-500 text-sm mb-4">上传 Excel 文件，自动识别所有 Sheet 的列名（点击列名可复制）。</p>
+        <input type="file" id="excel-identify-file" accept=".xlsx,.xls" class="w-full border rounded px-3 py-2 mb-4">
+        <div id="excel-identify-result" class="hidden">
+            <label class="block text-sm font-medium text-gray-700 mb-2">识别到的列名：</label>
+            <div id="excel-identify-list" class="space-y-4 excel-columns-scroll max-h-96 overflow-y-auto"></div>
         </div>
         <div class="flex justify-end gap-2 mt-6">
-            <button onclick="closeExcelUploadModal()" class="px-4 py-2 border rounded hover:bg-gray-50">关闭</button>
+            <button onclick="closeExcelIdentifyModal()" class="px-4 py-2 border rounded hover:bg-gray-50">关闭</button>
+        </div>
+    </div>
+</div>
+
+<!-- Excel 一键保存弹窗 -->
+<div id="batch-save-modal" class="modal-overlay hidden">
+    <div class="modal-content p-6 modal-xl">
+        <h3 class="text-lg font-semibold mb-4">Excel 一键保存</h3>
+        <p class="text-gray-500 text-sm mb-4">上传 Excel 文件，一键将所有 Sheet 的列映射和章节排序保存到配置文件。</p>
+        
+        <input type="file" id="batch-save-file" accept=".xlsx,.xls" class="w-full border rounded px-3 py-2 mb-4">
+        
+        <div id="batch-save-preview" class="hidden">
+            <h4 class="font-medium mb-3">预览</h4>
+            <div id="sheets-preview-list" class="space-y-3 max-h-80 overflow-y-auto"></div>
+            
+            <div class="mt-4 p-3 bg-blue-50 rounded text-sm">
+                <p class="font-medium text-blue-800">保存规则：</p>
+                <ul class="mt-1 text-blue-700 list-disc list-inside">
+                    <li>所有 Sheet 的列映射将被自动创建/更新</li>
+                    <li>第一个 Sheet（实施总表）不会添加到章节排序</li>
+                    <li>其他 Sheet 如不存在于章节排序，将自动添加</li>
+                    <li>新增章节的优先级将自动递增</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="flex justify-end gap-2 mt-6">
+            <button onclick="closeBatchSaveModal()" class="px-4 py-2 border rounded hover:bg-gray-50">取消</button>
+            <button id="btn-batch-save" onclick="executeBatchSave()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                保存到配置
+            </button>
         </div>
     </div>
 </div>
@@ -60,8 +96,17 @@
 <script>
     let mappingsData = {};
     let editingSheet = null;
+    let batchSaveData = null; // 存储一键保存的预览数据
 
-    document.addEventListener('DOMContentLoaded', function() { loadMappings(); setActiveNav('columns'); });
+    document.addEventListener('DOMContentLoaded', function() { 
+        loadMappings(); 
+        setActiveNav('columns');
+        
+        // 绑定 Excel 一键保存文件选择事件
+        document.getElementById('batch-save-file').addEventListener('change', handleBatchSaveFile);
+        // 绑定 Excel 辅助识别文件选择事件
+        document.getElementById('excel-identify-file').addEventListener('change', handleExcelIdentifyFile);
+    });
 
     async function loadMappings() {
         try {
@@ -74,7 +119,7 @@
     function renderMappings() {
         const container = document.getElementById('mappings-list');
         const entries = Object.entries(mappingsData);
-        if (entries.length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无 Sheet 映射配置</p>'; return; }
+        if (entries.length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无 Sheet 映射配置，点击「Excel 一键保存」快速导入</p>'; return; }
         container.innerHTML = entries.map(([name, config]) => `
             <div class="border rounded-lg p-4">
                 <div class="flex justify-between items-start">
@@ -152,28 +197,158 @@
         });
     }
 
-    function showExcelUploadModal() {
-        document.getElementById('excel-upload-modal').classList.remove('hidden');
-        document.getElementById('excel-file').value = '';
-        document.getElementById('excel-columns-result').classList.add('hidden');
+    // ========== Excel 辅助识别 ==========
+    
+    function showExcelIdentifyModal() {
+        document.getElementById('excel-identify-modal').classList.remove('hidden');
+        document.getElementById('excel-identify-file').value = '';
+        document.getElementById('excel-identify-result').classList.add('hidden');
     }
 
-    function closeExcelUploadModal() { document.getElementById('excel-upload-modal').classList.add('hidden'); }
+    function closeExcelIdentifyModal() { 
+        document.getElementById('excel-identify-modal').classList.add('hidden'); 
+    }
 
-    document.getElementById('excel-file').addEventListener('change', async function(e) {
+    async function handleExcelIdentifyFile(e) {
         const file = e.target.files[0];
         if (!file) return;
         const formData = new FormData();
         formData.append('file', file);
         try {
+            showToast('正在解析...', 'info');
             const res = await fetch('/api/upload/excel', { method: 'POST', body: formData });
             const data = await res.json();
             if (data.success) {
-                document.getElementById('excel-columns-result').classList.remove('hidden');
-                document.getElementById('excel-columns-list').innerHTML = data.columns.map(col =>
-                    `<span class="tag cursor-pointer" onclick="navigator.clipboard.writeText('${col}'); showToast('已复制: ${col}')">${col}</span>`
-                ).join('');
+                document.getElementById('excel-identify-result').classList.remove('hidden');
+                const container = document.getElementById('excel-identify-list');
+                if (data.sheets) {
+                    container.innerHTML = Object.entries(data.sheets).map(([sheetName, columns]) => `
+                        <div class="border-b pb-3 mb-3 last:border-b-0">
+                            <div class="font-medium text-primary mb-2">📄 ${sheetName} (${columns.length} 列)</div>
+                            <div class="flex flex-wrap gap-2">
+                                ${columns.map(col =>
+                                    `<span class="tag cursor-pointer" onclick="navigator.clipboard.writeText('${col}'); showToast('已复制: ${col}')">${col}</span>`
+                                ).join('')}
+                            </div>
+                        </div>
+                    `).join('');
+                }
             } else { showToast(data.error || '解析失败', 'error'); }
         } catch (err) { showToast('上传失败', 'error'); }
-    });
+    }
+
+    // ========== Excel 一键保存 ==========
+    
+    function showBatchSaveModal() {
+        batchSaveData = null;
+        document.getElementById('batch-save-modal').classList.remove('hidden');
+        document.getElementById('batch-save-file').value = '';
+        document.getElementById('batch-save-preview').classList.add('hidden');
+        document.getElementById('btn-batch-save').disabled = true;
+    }
+
+    function closeBatchSaveModal() { 
+        document.getElementById('batch-save-modal').classList.add('hidden'); 
+    }
+
+    async function handleBatchSaveFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+            showToast('正在解析 Excel...', 'info');
+            const res = await fetch('/api/upload/excel/preview', { method: 'POST', body: formData });
+            const data = await res.json();
+            
+            if (data.success) {
+                batchSaveData = data;
+                renderBatchSavePreview(data);
+                document.getElementById('batch-save-preview').classList.remove('hidden');
+                document.getElementById('btn-batch-save').disabled = false;
+            } else {
+                showToast(data.error || '解析失败', 'error');
+            }
+        } catch (err) {
+            showToast('上传失败: ' + err.message, 'error');
+        }
+    }
+
+    function renderBatchSavePreview(data) {
+        const container = document.getElementById('sheets-preview-list');
+        const existingChapters = data.current_priority_rules || [];
+        
+        container.innerHTML = data.sheets.map(sheet => {
+            const isFirst = sheet.is_first_sheet;
+            const exists = existingChapters.includes(sheet.name);
+            
+            let statusBadge = '';
+            let statusText = '';
+            
+            if (isFirst) {
+                statusBadge = '<span class="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">第一个 Sheet</span>';
+                statusText = '仅更新列映射';
+            } else if (exists) {
+                statusBadge = '<span class="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded">已存在</span>';
+                statusText = '更新列映射';
+            } else {
+                const nextPriority = data.max_priority + 10;
+                statusBadge = '<span class="px-2 py-1 text-xs bg-green-100 text-green-600 rounded">新增</span>';
+                statusText = `将新增到章节排序（优先级: ${nextPriority}）`;
+            }
+            
+            return `
+                <div class="border rounded-lg p-4 ${isFirst ? 'bg-gray-50' : ''}">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">${sheet.name}</span>
+                            ${statusBadge}
+                        </div>
+                        <span class="text-sm text-gray-500">${sheet.columns.length} 列</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mb-2">${statusText}</p>
+                    <div class="flex flex-wrap gap-1">
+                        ${sheet.columns.slice(0, 6).map(col => `<span class="tag text-xs">${col}</span>`).join('')}
+                        ${sheet.columns.length > 6 ? `<span class="text-xs text-gray-400">+${sheet.columns.length - 6} 更多</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function executeBatchSave() {
+        if (!batchSaveData || !batchSaveData.sheets) {
+            showToast('请先上传 Excel 文件', 'error');
+            return;
+        }
+        
+        const btn = document.getElementById('btn-batch-save');
+        btn.disabled = true;
+        btn.textContent = '保存中...';
+        
+        try {
+            const res = await apiRequest('/api/config/batch-save', 'POST', {
+                sheets: batchSaveData.sheets
+            });
+            
+            if (res.success) {
+                const updated = res.updated || {};
+                const mappingCount = (updated.sheet_column_mapping || []).length;
+                const chapterCount = (updated.priority_rules || []).length;
+                
+                showToast(`保存成功！更新 ${mappingCount} 个列映射，新增 ${chapterCount} 个章节`, 'success');
+                closeBatchSaveModal();
+                loadMappings();
+            } else {
+                showToast(res.error || '保存失败', 'error');
+            }
+        } catch (err) {
+            showToast('保存失败: ' + err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '保存到配置';
+        }
+    }
 </script>
