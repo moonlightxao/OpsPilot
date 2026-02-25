@@ -1,199 +1,131 @@
 # ============================================================
 # OpsPilot 规则配置文件
-# 说明：所有业务逻辑（排序、映射）从此文件读取
+# 最后更新: 2026-02-26 01:40:48
 # ============================================================
 
-# 实施总表来源配置 (对应 PRD 第2章「实施步骤和计划」实施总表)
-# 与 实施文档.docx 样例列一致：序号|任务|开始时间|结束时间|实施人|复核人
-implementation_summary:
-  strategy: "first_sheet"
-  sheet_names:
-    - "变更安排"
-    - "上线安排"
-    - "实施总表"
-  # 标准输出列（固定顺序，与样例一致）
-  output_columns: ["序号", "任务", "实施人", "复核人"]
-  # Excel 列名别名 -> 标准列名 映射（Parser 按此映射，未匹配则尝试第一行）
-  column_mapping:
-    序号: ["任务序号", "序号", "No", "#", "编号"]
-    任务: ["任务", "任务名", "任务名称", "Task"]
-    实施人: ["实施人", "执行人", "负责人"]
-    复核人: ["复核人", "复核", "审核人"]
-  # 需做 Excel 日期序列号转换的列
-  date_columns: []
-  auto_sequence: true    # 无序号列时自动生成 1,2,3...
-  drop_unnamed_columns: true  # 过滤 Unnamed、空列名
-
-# 章节优先级 (数值越小越优先，对应 Word 输出顺序)
-# 对应 PRD 3.1 章节排序与过滤
-# 注意：Sheet 名称必须与 Excel 实际名称完全一致
 priority_rules:
-  "上线代码包清单": 10
-  "数据库脚本部署": 15
-  "应用配置": 20
-  "容器配置": 30
-  "MQS配置": 40
-  "ROMA任务": 50
-
-# 动作语义展开库 (对应 PRD 3.2 任务聚合)
-# instruction: 操作说明文本，渲染在任务表格前
-# is_high_risk: 是否为高危操作，触发人工确认
-# render_table: 是否需要渲染任务清单表格
-action_library:
-  "新增":
-    instruction: "在配置管理中心，点击新增按钮，新增以下配置："
-    is_high_risk: false
-    render_table: true
-  "修改":
-    instruction: "在配置管理中心，定位以下配置项并修改："
-    is_high_risk: false
-    render_table: true
-  "删除":
-    instruction: "【高危操作】在配置管理中心，定位以下配置项并删除："
-    is_high_risk: true
-    render_table: true
-  "下线":
-    instruction: "【高危操作】在配置管理中心，定位以下配置项并执行下线操作："
-    is_high_risk: true
-    render_table: true
-  "重建":
-    instruction: "【高危操作】在配置管理中心，定位以下配置项并执行重建操作："
-    is_high_risk: true
-    render_table: true
-  "替换":
-    instruction: "在配置管理中心，定位以下配置项并执行替换操作："
-    is_high_risk: false
-    render_table: true
-  "启用":
-    instruction: "在配置管理中心，定位以下配置项并启用："
-    is_high_risk: false
-    render_table: true
-  "禁用":
-    instruction: "在配置管理中心，定位以下配置项并禁用："
-    is_high_risk: false
-    render_table: true
-  "部署":
-    instruction: "执行以下部署任务："
-    is_high_risk: false
-    render_table: true
-  "升级":
-    instruction: "执行以下升级任务："
-    is_high_risk: false
-    render_table: true
-
-# 高危操作关键字列表 (对应 PRD 3.3 风险识别)
-# 凡包含以下关键字的操作类型，均需触发人工确认流程
-high_risk_keywords:
-  - "删除"
-  - "下线"
-  - "重建"
-  - "停用"
-  - "卸载"
-
-# Sheet 类型与表头映射 (动态表头支持)
-# 定义不同 Sheet 类型在 Word 表格中应展示的列
-# columns: Word 表格显示的标准列名
-# column_mapping: Excel 实际列名 -> 标准列名 的映射（支持别名）
-# 注意：Sheet 名称必须与 Excel 完全一致
+  容器配置: 30
+  上线代码包清单: 40
+  应用配置: 50
+  MQS配置: 60
+  ROMA任务: 70
+action_library: {}
 sheet_column_mapping:
-  "数据库脚本部署":
-    columns: ["脚本名称", "执行顺序", "数据库", "执行人", "备注"]
+  变更安排:
+    columns:
+    - 任务序号
+    - 任务
+    - 是否完成
+    - 实施人
+    - 复核人
+    - 46315
+    - 46316
     column_mapping:
-      脚本名称: ["脚本名称", "任务名", "任务名称", "脚本"]
-      执行顺序: ["执行顺序", "顺序", "序号"]
-      数据库: ["数据库", "目标库", "DB"]
-      执行人: ["执行人", "实施人", "负责人"]
-      备注: ["备注", "说明", "描述"]
-  "应用配置":
-    columns: ["部署单元", "配置项", "配置值", "实施人", "复核人"]
+      任务序号:
+      - 任务序号
+      任务:
+      - 任务
+      是否完成:
+      - 是否完成
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
+      46315:
+      - 46315
+      46316:
+      - 46316
+  应用配置:
+    columns:
+    - 操作类型
+    - 部署单元
+    - 键
+    - 值
+    - 实施人
+    - 复核人
     column_mapping:
-      部署单元: ["部署单元", "应用名", "服务名", "所属应用"]
-      配置项: ["键", "配置项", "配置名称", "参数"]
-      配置值: ["值", "配置值", "Value"]
-      实施人: ["实施人", "执行人", "负责人"]
-      复核人: ["复核人", "审核人", "复核"]
-  "容器配置":
-    columns: ["部署单元", "参数名", "参数值", "实施人", "复核人"]
+      操作类型:
+      - 操作类型
+      部署单元:
+      - 部署单元
+      键:
+      - 键
+      值:
+      - 值
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
+  容器配置:
+    columns:
+    - 操作类型
+    - 部署单元
+    - 参数
+    - 值
+    - 实施人
+    - 复核人
     column_mapping:
-      部署单元: ["部署单元", "应用名", "服务名", "容器名称"]
-      参数名: ["参数", "参数名", "配置项", "键"]
-      参数值: ["值", "参数值", "配置值"]
-      实施人: ["实施人", "执行人", "负责人"]
-      复核人: ["复核人", "审核人", "复核"]
-  "MQS配置":
-    columns: ["Topic名称", "应用名称", "实施人", "复核人"]
+      操作类型:
+      - 操作类型
+      部署单元:
+      - 部署单元
+      参数:
+      - 参数
+      值:
+      - 值
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
+  MQS配置:
+    columns:
+    - 操作类型
+    - TOPIC名称
+    - 应用名称
+    - 实施人
+    - 复核人
     column_mapping:
-      Topic名称: ["TOPIC名称", "Topic名称", "Topic"]
-      应用名称: ["应用名称", "应用名", "订阅关系"]
-      实施人: ["实施人", "执行人", "负责人"]
-      复核人: ["复核人", "审核人", "复核"]
-  "ROMA任务":
-    columns: ["应用名称", "任务名称", "实施人", "复核人"]
+      操作类型:
+      - 操作类型
+      TOPIC名称:
+      - TOPIC名称
+      应用名称:
+      - 应用名称
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
+  ROMA任务:
+    columns:
+    - 应用名称
+    - 任务名称
+    - 操作
+    - 实施人
+    - 复核人
     column_mapping:
-      应用名称: ["应用名称", "应用名"]
-      任务名称: ["任务名称", "任务名", "任务"]
-      实施人: ["实施人", "执行人", "负责人"]
-      复核人: ["复核人", "审核人", "复核"]
-  "上线代码包清单":
-    columns: ["包名", "包类型", "部署资源", "实施人", "复核人"]
+      应用名称:
+      - 应用名称
+      任务名称:
+      - 任务名称
+      操作:
+      - 操作
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
+  上线代码包清单:
+    columns:
+    - 操作类型
+    - 包名
+    - 包类型
+    - 部署资源名
     column_mapping:
-      包名: ["包名", "文件名", "名称"]
-      包类型: ["包类型", "类型", "分类"]
-      部署资源: ["部署资源名", "资源", "目标"]
-      实施人: ["实施人", "执行人", "负责人"]
-      复核人: ["复核人", "审核人", "复核"]
-
-# 默认表头（当 Sheet 未在映射中定义时使用）
-default_columns:
-  - "部署单元"
-  - "操作类型"
-  - "实施人"
-  - "复核人"
-
-# 核心解析字段定义 (对应 PRD 2. 输入数据规范)
-# 定义从 Excel 中必须提取的列名（支持多种别名匹配）
-core_fields:
-  task_name:
-    aliases: ["任务", "任务名", "任务名称", "Task Name"]
-    required: false
-  action_type:
-    aliases: ["操作类型", "操作", "Action", "动作"]
-    required: true
-  deploy_unit:
-    aliases: ["部署单元", "应用名", "应用名称", "服务名"]
-    required: false
-  executor:
-    aliases: ["实施人", "执行人", "负责人"]
-    required: false
-  external_link:
-    aliases: ["外部链接", "链接", "URL", "参考链接"]
-    required: false
-
-# Word 文档输出配置
-output_config:
-  # 标题样式
-  title_style:
-    font_name: "微软雅黑"
-    font_size: 16
-    bold: true
-  # 正文样式
-  body_style:
-    font_name: "宋体"
-    font_size: 11
-    bold: false
-  # 表头样式
-  table_header_style:
-    font_name: "微软雅黑"
-    font_size: 10
-    bold: true
-    background_color: "#D9E2F3"
-
-# 渲染策略配置
-# strategy: 渲染策略
-#   - auto: 优先使用模板，模板不存在或渲染失败时回退内置渲染
-#   - template: 严格使用模板，失败抛出异常
-#   - builtin: 仅使用内置渲染，忽略模板
-render_config:
-  strategy: "auto"
-  template_path: "templates/template.docx"
-  fallback_to_builtin: true
+      操作类型:
+      - 操作类型
+      包名:
+      - 包名
+      包类型:
+      - 包类型
+      部署资源名:
+      - 部署资源名
+high_risk_keywords: []
