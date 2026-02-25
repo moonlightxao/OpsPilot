@@ -14,6 +14,9 @@
 - **人机协同**：两阶段执行模式，分析结果需人工确认后方可生成文档
 - **MCP 服务化**：支持通过 MCP 协议对外暴露工具，供外部 Agent 调用
 - **Web 配置中心**：可视化界面管理规则配置，支持拖拽排序、富文本编辑、版本回滚
+- **Excel 一键保存**：上传 Excel 自动识别所有 Sheet 列名，一键保存到配置并自动填充章节排序
+- **操作类型章节绑定**：每个章节拥有独立的操作类型库，配置更灵活
+- **批量删除**：章节排序、操作类型、列映射页面支持批量删除
 
 ## 安装
 
@@ -122,13 +125,21 @@ OpsPilot/
 │       ├── app.py              # Flask 应用工厂
 │       ├── routes/             # 路由模块
 │       │   ├── __init__.py
-│       │   ├── config.py
-│       │   ├── backup.py
-│       │   └── upload.py
-│       └── services/           # 服务层
-│           ├── __init__.py
-│           ├── config_service.py
-│           └── backup_service.py
+│       │   ├── config.py       # 配置管理 API
+│       │   ├── backup.py       # 备份管理 API
+│       │   └── upload.py       # 文件上传 API
+│       ├── services/           # 服务层
+│       │   ├── __init__.py
+│       │   ├── config_service.py
+│       │   └── backup_service.py
+│       └── templates/          # 前端模板
+│           ├── base.html
+│           ├── index.html
+│           └── partials/       # 页面片段
+│               ├── chapters.html
+│               ├── actions.html
+│               ├── columns.html
+│               └── backups.html
 ├── output/                     # 输出目录
 │   ├── report.json             # 中间态数据（report.json v2.1）
 │   └── 实施文档.docx           # 生成的文档
@@ -148,9 +159,10 @@ OpsPilot/
 
 | 功能 | 说明 |
 |------|------|
-| **章节排序** | 拖拽调整 Excel Sheet → Word 章节的映射顺序 |
-| **操作类型** | 表格化管理操作类型，支持富文本描述 + 图片上传 |
-| **列映射** | 手动输入或 Excel 辅助识别列名别名 |
+| **章节排序** | 拖拽调整 Excel Sheet → Word 章节的映射顺序，支持批量删除 |
+| **操作类型** | 表格化管理操作类型，支持富文本描述 + 图片上传，**与章节绑定**，每个章节独立配置 |
+| **列映射** | 手动输入或 Excel 辅助识别列名别名，支持批量删除 |
+| **Excel 一键保存** | 上传 Excel 自动识别所有 Sheet 列名，一键保存列映射并自动填充章节排序 |
 | **版本回滚** | 保留最近 10 个版本，支持一键回滚 |
 | **YAML 预览** | 实时预览配置文件内容 |
 
@@ -169,6 +181,22 @@ http://127.0.0.1:5000
 - 配置文件：`config/rules.yaml`
 - 图片存储：`config/images/`
 - 备份文件：`config/backups/rules.yaml.bak.{timestamp}`
+
+### Excel 一键保存
+
+上传 Excel 文件后，可一键将识别到的所有 Sheet 列名保存到配置文件：
+
+- **列映射自动保存**：每个 Sheet 的列名自动保存到 `sheet_column_mapping`（列名同时作为标准列名和别名）
+- **章节排序自动填充**：除第一个 Sheet（上线安排）外，其他 Sheet 名称自动添加到 `priority_rules`
+- **优先级自动递增**：新增章节的优先级 = 当前最大优先级 + 10
+- **去重处理**：已存在的 Sheet 名称不重复添加到章节排序，但列映射会更新
+
+### 操作类型章节绑定
+
+每个章节拥有独立的操作类型库，切换章节时自动加载对应的操作类型配置。
+
+- **数据迁移**：旧格式 `action_library` 自动迁移为 `{章节名: {操作类型: 配置}}` 格式
+- **配置隔离**：不同章节的操作类型互不影响
 
 ## MCP 服务化
 
@@ -201,7 +229,7 @@ http://127.0.0.1:5000
 - **实施总表配置 (implementation_summary)**：定义第2章实施总表的来源 Sheet、列映射、日期转换
 - **渲染策略 (render_config)**：控制渲染模式、模板路径、回退行为
 - **优先级 (priority_rules)**：定义各 Sheet 在 Word 章节中的先后顺序
-- **动作映射 (action_library)**：定义操作类型对应的详细步骤描述文本
+- **动作映射 (action_library)**：定义操作类型对应的详细步骤描述文本（按章节分组）
 - **高危操作 (high_risk_keywords)**：定义需要人工确认的高危操作关键字
 - **列映射 (sheet_column_mapping)**：定义不同 Sheet 类型在 Word 表格中的列展示
 
@@ -248,6 +276,7 @@ Excel → Parser → report.json v2.1 (人工确认) → docxtpl → template.do
 | M4 | 模板填充方案验证通过 | ✅ 完成 |
 | M5 | MCP 服务上线，外部 Agent 可调用 | ✅ 完成 |
 | M6 | Web 配置中心上线，可视化配置管理 | ✅ 完成 |
+| M7 | 操作类型章节绑定 + 批量删除 + 核心字段同步 | ⏳ 开发中 |
 
 ## 依赖
 
