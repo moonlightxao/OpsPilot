@@ -1,9 +1,9 @@
 # 🚀 OpsPilot 项目执行看板
 
 ## 📊 总体进度状态
-- **当前阶段**: Excel 一键保存功能开发完成
-- **完成度**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
-- **项目健康度**: 🟢 M6 里程碑完成，Web 配置中心 + Excel 一键保存已上线
+- **当前阶段**: M7 技术方案设计完成（V2 + V3），待开发
+- **完成度**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100% (M6 完成)
+- **项目健康度**: 🟢 核心功能已完成，Web 配置中心增强版设计中
 - **更新日期**: 2026-02-26
 
 ---
@@ -105,6 +105,7 @@ fastmcp>=0.1.0
 | 🟢 | 验收缺陷 | 产出与样例不符，按 TECH_DESIGN v2 已实现 Parser/模板修正 | 已解决 | Developer |
 | 🟡 | 缺陷分析 | QA_DEFECT_REPORT 缺陷根因：实现滞后 + rules 配置遗漏，非技术方案问题 | 已分析 | Architect |
 | 🟡 | 配置遗漏 | rules.yaml 缺少「序号」列 column_mapping，黄金样本「任务序号」无法映射 | 已补充 | Architect |
+| 🟡 | 功能缺失 | Excel一键保存时 core_fields 未与保留的列名同步，导致解析器仍尝试匹配已删除的列 | 技术方案完成 | Architect |
 
 ---
 
@@ -168,6 +169,46 @@ fastmcp>=0.1.0
 - [x] **W2.6.3 ConfigService 扩展**：添加 `batch_save_sheets` 方法 ✅ 2026-02-26
 - [x] **W2.6.4 前端预览 UI**：Excel 预览界面（Sheet 卡片列表） ✅ 2026-02-26
 - [x] **W2.6.5 保存按钮交互**：前端"保存到配置"按钮及交互逻辑 ✅ 2026-02-26
+
+### 2.9 操作类型章节绑定 + 批量删除功能 (Owner: Developer) 🆕
+**技术方案**: `docs/TECH_DESIGN_WEB_CONFIG_V2.md`
+
+**后端任务**:
+- [x] **V2-B1** ConfigService 扩展：新增章节操作类型相关方法 ✅ 2026-02-26
+- [x] **V2-B2** ConfigService 扩展：新增批量删除方法 ✅ 2026-02-26
+- [x] **V2-B3** ConfigService 扩展：数据格式兼容逻辑（旧格式自动迁移） ✅ 2026-02-26
+- [x] **V2-B4** API 路由：章节操作类型 API（GET/PUT/DELETE） ✅ 2026-02-26
+- [x] **V2-B5** API 路由：批量删除 API（章节/操作类型/列映射） ✅ 2026-02-26
+
+**前端任务**:
+- [x] **V2-F1** 操作类型页面重构：章节切换交互 ✅ 2026-02-26
+- [x] **V2-F2** 操作类型页面重构：新增/编辑弹窗适配章节 ✅ 2026-02-26
+- [x] **V2-F3** 章节排序页面：添加复选框和批量删除 ✅ 2026-02-26
+- [x] **V2-F4** 操作类型页面：添加复选框和批量删除 ✅ 2026-02-26
+- [x] **V2-F5** 列映射页面：添加复选框和批量删除 ✅ 2026-02-26
+- [x] **V2-F6** 通用组件：批量选择状态管理 ✅ 2026-02-26
+- [x] **V2-F7** 通用组件：批量删除确认弹窗 ✅ 2026-02-26
+
+### 2.10 核心字段同步功能 (Owner: Developer) 🆕
+**需求来源**: 用户反馈 Excel 一键保存后，删除的列名仍在 core_fields 中，导致解析异常
+
+**需求背景**:
+- 用户在列映射页面上传 Excel 后，手动删除不需要的列
+- 但 `core_fields` 中的别名未同步更新，仍包含已删除的列名
+- 解析器仍尝试匹配这些已删除的列名，导致生成文档异常
+
+**解决方案**: 在列映射页面增加「同步到核心字段」按钮，用户手动触发同步
+
+**PRD 更新**: `docs/OpsPilot_PRD.md` 3.4.3-C 节「核心字段同步」
+
+**后端任务**:
+- [x] **CF-B1** ConfigService 扩展：新增 `sync_core_fields_from_columns` 方法，根据 sheet_column_mapping 中的列名更新 core_fields ✅ 2026-02-26
+- [x] **CF-B2** API 路由：核心字段同步 API（POST `/api/config/sync-core-fields`） ✅ 2026-02-26
+- [x] **CF-B3** 核心字段识别逻辑：根据关键词匹配列名到对应的核心字段（操作类型→action_type，任务名→task_name 等） ✅ 2026-02-26
+
+**前端任务**:
+- [x] **CF-F1** 列映射页面：底部增加「同步到核心字段」按钮 ✅ 2026-02-26
+- [x] **CF-F2** 同步交互：点击按钮调用 API，显示 Toast 提示同步结果 ✅ 2026-02-26
 
 ### 3. 质量保障 (Owner: Tester)
 - [x] **单元测试**：Parser 30/30 通过，Renderer 22/22 全部通过 ✅ 2026-02-18
@@ -243,6 +284,13 @@ fastmcp>=0.1.0
 - **2026-02-25 [PM]** 需求细化：Excel 辅助识别新增「一键保存」功能，自动保存 Sheet 列映射并填充章节排序 | 更新 OpsPilot_PRD.md 3.4.3-C 节、6.2 节 | 待 Architect 技术方案设计
 - **2026-02-25 [Architect]** 技术方案设计完成：产出 TECH_DESIGN_WEB_CONFIG.md v1.1，新增 6.3.1 Excel 一键保存功能方案 | 定义 2 个新 API、5 项开发任务 | 产出物：TECH_DESIGN_WEB_CONFIG.md
 - **2026-02-26 [Developer]** Excel 一键保存功能完成：实现 `/api/upload/excel/preview` 预览 API、`/api/config/batch-save` 批量保存 API、ConfigService.batch_save_sheets 方法、前端预览 UI 和保存交互 | 5 项任务全部完成 | 产出物：src/web/routes/upload.py、src/web/routes/config.py、src/web/services/config_service.py、src/web/templates/partials/columns.html
+- **2026-02-26 [PM]** 需求细化：操作类型配置需与章节绑定，每个章节拥有独立的操作类型库 | 更新 OpsPilot_PRD.md 3.4.3-B 节、6.2 节 | 待 Architect 技术方案设计
+- **2026-02-26 [PM]** 需求细化：章节排序、操作类型、列映射页面新增批量删除功能 | 更新 OpsPilot_PRD.md 3.4.3-A/B/C 节、6.2 节 | 待 Architect 技术方案设计
+- **2026-02-26 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_WEB_CONFIG_V2.md`，定义操作类型章节绑定、批量删除功能技术方案 | 包含数据迁移策略、API 扩展、前端重构、12 项开发任务 | 产出物：TECH_DESIGN_WEB_CONFIG_V2.md
+- **2026-02-26 [PM]** 需求细化：发现 Excel 一键保存后 core_fields 未与保留的列名同步，新增「核心字段同步」功能 | 更新 OpsPilot_PRD.md 3.4.3-C 节、6.2 节 | 待 Architect 技术方案设计
+- **2026-02-26 [PM]** 需求确认：用户确认「核心字段同步」需求 - 列映射页面新增「同步到核心字段」按钮，手动触发同步 | 产出物：OpsPilot_PRD.md | 已移交 Architect 进行技术方案设计
+- **2026-02-26 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_WEB_CONFIG_V3.md`，定义核心字段同步功能技术方案 | 包含关键词匹配规则、ConfigService 扩展、API 设计、5 项开发任务 | 产出物：TECH_DESIGN_WEB_CONFIG_V3.md
+- **2026-02-26 [Developer]** 核心字段同步功能完成：实现 sync_core_fields_from_columns 方法、关键词匹配、同步 API、前端同步按钮及交互 | 5 项任务全部完成，16 passed | 产出物：src/web/services/config_service.py、src/web/routes/config.py、src/web/templates/partials/columns.html、tests/test_web_api_v2.py
 
 ---
 
@@ -264,7 +312,9 @@ fastmcp>=0.1.0
 │                      config/rules.yaml (规则库)                         │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                      src/web/ (Web 配置中心) ✅ 完成                     │
-│                      ├── Excel 一键保存 🆕 待开发                        │
+│                      ├── Excel 一键保存 ✅ 完成                          │
+│                      ├── 操作类型章节绑定 + 批量删除 ✅ 完成              │
+│                      └── 核心字段同步 ✅ 完成                            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -297,6 +347,7 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 - [x] **M4**: 模板填充方案验证通过（架构升级）✅ 2026-02-22
 - [x] **M5**: MCP 服务上线，外部 Agent 可调用（服务化）✅ 2026-02-22
 - [x] **M6**: Web 配置中心上线，运维人员可通过可视化界面管理规则配置 ✅ 2026-02-25
+- [x] **M7**: 操作类型章节绑定 + 批量删除 + 核心字段同步功能上线（Web 增强版）✅ 2026-02-26
 
 ---
 
@@ -328,7 +379,7 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 
 ## 📣 下一步指派
 
-**项目状态**: 🟢 Excel 一键保存功能开发完成，项目进入验收阶段
+**项目状态**: 🟢 M7 里程碑完成，核心字段同步功能上线
 
 ### 致 Developer
 **已完成** ✅ 2026-02-26
@@ -336,21 +387,59 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 - **W2 阶段（核心页面）**：章节排序、操作类型、列映射配置页面、图片上传 API
 - **W3 阶段（高级功能）**：配置保存、版本回滚、YAML 预览、表单校验
 - **W2.6 阶段（Excel 一键保存）**：Excel 预览 API、批量保存 API、ConfigService 扩展、前端预览 UI、保存按钮交互
+- **V2 阶段（操作类型章节绑定 + 批量删除）** ✅
+  - **后端任务**: V2-B1 ~ V2-B5（5 项）全部完成
+  - **前端任务**: V2-F1 ~ V2-F7（7 项）全部完成
+  - **单元测试**: 8 passed, 2 skipped
+- **V3 阶段（核心字段同步）** ✅
+  - **后端任务**: CF-B1 ~ CF-B3（3 项）全部完成
+  - **前端任务**: CF-F1 ~ CF-F2（2 项）全部完成
+  - **单元测试**: 16 passed, 2 skipped
+  - **后端任务**: V2-B1 ~ V2-B5（5 项）全部完成
+  - **前端任务**: V2-F1 ~ V2-F7（7 项）全部完成
+  - **单元测试**: 8 passed, 2 skipped
+
+**待开发** 🆕 2.10 阶段（核心字段同步）
+- **技术方案**: `docs/TECH_DESIGN_WEB_CONFIG_V3.md`
+- **需求文档**: `docs/OpsPilot_PRD.md` 3.4.3-C 节「核心字段同步」
+- **后端任务**: CF-B1 ~ CF-B3（3 项）
+- **前端任务**: CF-F1 ~ CF-F2（2 项）
+- **交互**: 列映射页面新增「同步到核心字段」按钮，手动触发同步
 
 **产出物**:
-- `src/web/` - Web 配置中心完整实现
-- `main.py` - 新增 `web` 命令
-- `requirements.txt` - 新增 flask/werkzeug 依赖
+- `src/web/services/config_service.py` - ConfigService V2 扩展（章节操作类型、批量删除、格式迁移）
+- `src/web/routes/config.py` - API 路由 V2 扩展（章节操作类型 API、批量删除 API）
+- `src/web/templates/partials/actions.html` - 操作类型页面重构（章节切换、批量删除）
+- `src/web/templates/partials/chapters.html` - 章节排序页面（批量删除）
+- `src/web/templates/partials/columns.html` - 列映射页面（批量删除）
+- `tests/test_web_api_v2.py` - V2 API 单元测试
 
 ### 致 Tester
 **待执行** (M6 验收)
-- [ ] **Web API 测试**：API 单元测试
+- [x] **Web API 测试**：API 单元测试 ✅ 8 passed
 - [ ] **Web E2E 测试**：端到端测试，验收 PRD 6.2 节
+
+**待执行** 🆕 2.9 阶段验收
+- [x] **V2-T1** API 单元测试：章节操作类型 API ✅
+- [x] **V2-T2** API 单元测试：批量删除 API ✅
+- [x] **V2-T3** 数据迁移测试：旧格式兼容性验证 ✅
+- [ ] **V2-T4** E2E 测试：操作类型章节绑定
+- [ ] **V2-T5** E2E 测试：批量删除功能
+
+**待执行** 🆕 2.10 阶段验收
+- [ ] **CF-T1** API 单元测试：核心字段同步 API
+- [ ] **CF-T2** 关键词匹配测试：验证各种列名匹配规则
+- [ ] **CF-T3** E2E 测试：同步按钮交互流程
 
 ### 致 PM
 **待验收** (M6 里程碑)
 - 启动验证：`python main.py web`
 - 功能验收：章节排序、操作类型、列映射、版本回滚、Excel 一键保存
+
+**待验收** 🆕 M7 里程碑（操作类型章节绑定 + 批量删除 + 核心字段同步）
+- 操作类型章节绑定：章节切换、独立配置、数据兼容
+- 批量删除功能：章节/操作类型/列映射三页面批量删除
+- 核心字段同步：列映射页面「同步到核心字段」按钮、Toast 提示、解析器验证
 
 ---
 
