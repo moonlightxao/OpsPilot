@@ -171,13 +171,15 @@ class TestConfigService:
         assert "应用配置" not in rules
     
     def test_get_action_library(self, sample_rules_yaml):
-        """测试获取操作类型库"""
+        """测试获取操作类型库 - 旧格式会自动迁移为新格式"""
         service = ConfigService(config_path=str(sample_rules_yaml))
         library = service.get_action_library()
         
-        assert "新增" in library
-        assert "删除" in library
-        assert library["删除"]["is_high_risk"] is True
+        # 新格式下，操作类型按章节分组，旧格式会迁移到"默认"章节
+        assert "默认" in library
+        assert "新增" in library["默认"]
+        assert "删除" in library["默认"]
+        assert library["默认"]["删除"]["is_high_risk"] is True
     
     def test_set_action_high_risk_sync(self, sample_rules_yaml):
         """测试设置操作类型时同步高危关键字"""

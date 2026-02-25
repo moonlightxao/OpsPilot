@@ -1,3 +1,4 @@
+<!-- DEBUG_OPSPILOT_WEB_V3_ACTIONS -->
 <div class="space-y-6">
     <div class="bg-white rounded-lg shadow p-6">
         <div class="flex justify-between items-center mb-4">
@@ -28,15 +29,15 @@
                     <h4 class="font-medium text-gray-700">
                         当前章节：<span id="current-chapter-name" class="text-primary">-</span>
                     </h4>
-                    <div id="batch-actions-bar" class="hidden items-center gap-2">
-                        <span class="text-sm text-gray-500">已选择 <span id="selected-count">0</span> 项</span>
-                        <button onclick="batchDeleteActions()" id="batch-delete-btn" class="px-3 py-1 bg-danger text-white text-sm rounded hover:bg-red-600 disabled:opacity-50" disabled>
-                            批量删除
-                        </button>
-                    </div>
                 </div>
                 <div id="actions-list" class="space-y-3">
                     <p class="text-gray-500">请选择章节</p>
+                </div>
+                <div id="batch-actions-bar" class="hidden mt-4 pt-3 border-t flex items-center justify-between">
+                    <span class="text-sm text-gray-500">已选择 <span id="selected-count">0</span> 项</span>
+                    <button onclick="batchDeleteActions()" id="batch-delete-btn" class="px-3 py-1 bg-danger text-white text-sm rounded hover:bg-red-600 disabled:opacity-50" disabled>
+                        批量删除
+                    </button>
                 </div>
             </div>
         </div>
@@ -57,8 +58,8 @@
                 <input type="text" id="action-name" class="w-full border rounded px-3 py-2" placeholder="如：新增、修改、删除">
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">操作说明</label>
-                <textarea id="action-instruction" class="w-full border rounded px-3 py-2 h-24" placeholder="在配置管理中心，点击新增按钮，新增以下配置："></textarea>
+                <label class="block text-sm font-medium text-gray-700 mb-1">步骤说明（支持富文本和图片）</label>
+                <textarea id="action-instruction" class="w-full border rounded px-3 py-2" style="min-height: 200px;" placeholder="在配置管理中心，点击新增按钮，新增以下配置："></textarea>
             </div>
             <div class="flex items-center gap-4">
                 <label class="flex items-center">
@@ -182,17 +183,19 @@
         
         container.innerHTML = entries.map(([name, config]) => {
             const isSelected = selectedActions.has(name);
+            const instructionHtml = config.instruction ? escapeHtml(config.instruction.replace(/<[^>]*>/g, '').substring(0, 100)) : '无操作说明';
             return `
                 <div class="border rounded-lg p-4 ${config.is_high_risk ? 'border-red-300 bg-red-50' : ''} ${isSelected ? 'ring-2 ring-primary' : ''}">
                     <div class="flex items-start gap-3">
-                        <input type="checkbox" class="mt-1" ${isSelected ? 'checked' : ''} 
+                        <input type="checkbox" class="mt-1" ${isSelected ? 'checked' : ''}
                                onchange="toggleActionSelection('${name}')">
                         <div class="flex-1">
                             <div class="flex items-center gap-2">
                                 <span class="font-medium">${name}</span>
                                 ${config.is_high_risk ? '<span class="px-2 py-0.5 bg-red-500 text-white text-xs rounded">高危</span>' : ''}
+                                ${config.instruction && config.instruction.includes('<') ? '<span class="px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded">含图片/富文本</span>' : ''}
                             </div>
-                            <p class="text-sm text-gray-600 mt-1">${config.instruction || '无操作说明'}</p>
+                            <p class="text-sm text-gray-600 mt-1">${instructionHtml}${config.instruction && config.instruction.length > 100 ? '...' : ''}</p>
                             <p class="text-xs text-gray-400 mt-1">渲染表格: ${config.render_table ? '是' : '否'}</p>
                         </div>
                         <div class="flex gap-2">
@@ -203,6 +206,13 @@
                 </div>
             `;
         }).join('');
+    }
+
+    // HTML 转义函数
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     // 切换操作类型选择状态
@@ -225,12 +235,10 @@
         
         if (count > 0) {
             bar.classList.remove('hidden');
-            bar.style.display = 'flex';
             countEl.textContent = count;
             btn.disabled = false;
         } else {
             bar.classList.add('hidden');
-            bar.style.display = '';
             btn.disabled = true;
         }
     }
@@ -411,4 +419,100 @@
             showToast('添加失败', 'error');
         }
     }
+
+    // TinyMCE 富文本编辑器初始化
+    let tinymceInitialized = false;
+
+    function initTinyMCE() {
+        if (tinymceInitialized || typeof tinymce === 'undefined') return;
+
+        tinymce.init({
+            selector: '#action-instruction',
+            height: 250,
+            menubar: false,
+            plugins: [
+                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
+                'preview', 'anchor', 'searchreplace', 'visualblocks', 'code',
+                'fullscreen', 'insertdatetime', 'media', 'table', 'help', 'wordcount'
+            ],
+            toolbar: 'undo redo | formatselect | bold italic forecolor backcolor | ' +
+                     'alignleft aligncenter alignright alignjustify | ' +
+                     'bullist numlist outdent indent | link image | removeformat | help',
+            language: 'zh_CN',
+            language_url: 'https://cdn.jsdelivr.net/npm/tinymce-lang@6.8.3/langs6/zh_CN.min.js',
+            images_upload_url: '/api/upload/image',
+            images_upload_credentials: true,
+            automatic_uploads: true,
+            file_picker_types: 'image',
+            file_picker_callback: function(cb, value, meta) {
+                const input = document.createElement('input');
+                input.setAttribute('type', 'file');
+                input.setAttribute('accept', 'image/*');
+                input.onchange = function() {
+                    const file = this.files[0];
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        const id = 'blobid' + (new Date()).getTime();
+                        const blobCache = tinymce.activeEditor.editorUpload.blobCache;
+                        const base64 = reader.result.split(',')[1];
+                        const blobInfo = blobCache.create(id, file, base64);
+                        blobCache.add(blobInfo);
+                        cb(blobInfo.blobUri(), { title: file.name });
+                    };
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+            },
+            setup: function(editor) {
+                editor.on('change', function() {
+                    editor.save();
+                });
+            }
+        });
+        tinymceInitialized = true;
+    }
+
+    // 在弹窗打开时初始化 TinyMCE
+    function ensureTinyMCE() {
+        if (!tinymceInitialized) {
+            initTinyMCE();
+        }
+        // 等待 TinyMCE 初始化完成
+        if (typeof tinymce !== 'undefined' && tinymce.get('action-instruction')) {
+            return Promise.resolve();
+        }
+        return new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // 修改 showAddActionModal 以初始化 TinyMCE
+    const originalShowAddActionModal = showAddActionModal;
+    showAddActionModal = async function() {
+        originalShowAddActionModal();
+        await ensureTinyMCE();
+        if (typeof tinymce !== 'undefined' && tinymce.get('action-instruction')) {
+            tinymce.get('action-instruction').setContent('');
+        }
+    };
+
+    // 修改 editAction 以设置 TinyMCE 内容
+    const originalEditAction = editAction;
+    editAction = async function(name) {
+        originalEditAction(name);
+        await ensureTinyMCE();
+        const actions = actionLibrary[currentChapter] || {};
+        const config = actions[name];
+        if (config && typeof tinymce !== 'undefined' && tinymce.get('action-instruction')) {
+            tinymce.get('action-instruction').setContent(config.instruction || '');
+        }
+    };
+
+    // 修改 saveAction 以获取 TinyMCE 内容
+    const originalSaveAction = saveAction;
+    saveAction = async function() {
+        // 先保存 TinyMCE 内容到 textarea
+        if (typeof tinymce !== 'undefined' && tinymce.get('action-instruction')) {
+            tinymce.get('action-instruction').save();
+        }
+        await originalSaveAction();
+    };
 </script>
