@@ -291,6 +291,11 @@ fastmcp>=0.1.0
 - **2026-02-26 [PM]** 需求确认：用户确认「核心字段同步」需求 - 列映射页面新增「同步到核心字段」按钮，手动触发同步 | 产出物：OpsPilot_PRD.md | 已移交 Architect 进行技术方案设计
 - **2026-02-26 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_WEB_CONFIG_V3.md`，定义核心字段同步功能技术方案 | 包含关键词匹配规则、ConfigService 扩展、API 设计、5 项开发任务 | 产出物：TECH_DESIGN_WEB_CONFIG_V3.md
 - **2026-02-26 [Developer]** 核心字段同步功能完成：实现 sync_core_fields_from_columns 方法、关键词匹配、同步 API、前端同步按钮及交互 | 5 项任务全部完成，16 passed | 产出物：src/web/services/config_service.py、src/web/routes/config.py、src/web/templates/partials/columns.html、tests/test_web_api_v2.py
+- **2026-02-27 [PM]** M7 里程碑验收完成：操作类型章节绑定、批量删除、核心字段同步全部功能验收通过 | 更新 PROJECT_PROGRESS.md 验收结论
+- **2026-02-27 [PM]** 需求变更：1) 富文本编辑器从 TinyMCE 换成 WangEditor（完全免费）；2) 列映射同步改为保存时自动执行 | 更新 OpsPilot_PRD.md 3.4.3-B/C 节、6.2 节 | 待 Architect 技术方案设计
+- **2026-02-27 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_WEB_CONFIG_V4.md`，定义 WangEditor 替换方案、自动同步实现方案 | 包含 7 项开发任务、8 项测试任务 | 产出物：TECH_DESIGN_WEB_CONFIG_V4.md | 待 Developer 实现
+- **2026-02-27 [Developer]** V4 方案实现完成：TinyMCE 替换为 WangEditor、列映射保存时自动同步核心字段 | 7 项任务全部完成，服务验证通过 | 产出物：base.html、actions.html、columns.html、app.py
+- **2026-02-27 [Developer]** Bug 修复：1) YAML 预览报错（数字键导致排序失败）；2) core_fields 同步失败（非字符串列名处理） | 添加 `_stringify_keys` 函数、修复 `_match_core_field` 类型检查 | 产出物：config_service.py
 
 ---
 
@@ -351,6 +356,34 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 
 ---
 
+## ✅ PM 验收结论 (2026-02-27) — **M7 里程碑验收通过**
+
+### 操作类型章节绑定
+| 验收项 | 标准 | 结果 |
+|--------|------|------|
+| 章节切换 | 切换章节后显示该章节的操作类型列表 | ✅ 通过 |
+| 独立配置 | 不同章节可配置同名操作类型，步骤说明独立 | ✅ 通过 |
+| 数据结构 | `action_library` 为 `{章节名: {操作类型: 配置}}` | ✅ 通过 |
+
+### 批量删除功能
+| 验收项 | 标准 | 结果 |
+|--------|------|------|
+| 章节排序批量删除 | API 返回 `已删除 N 个章节` | ✅ 通过 |
+| 操作类型批量删除 | API 返回 `已删除 N 个操作类型` | ✅ 通过 |
+| 列映射批量删除 | API 返回 `已删除 N 个 Sheet 列映射` | ✅ 通过 |
+
+### 核心字段同步功能
+| 验收项 | 标准 | 结果 |
+|--------|------|------|
+| 同步 API | POST `/api/config/sync-core-fields` 正常响应 | ✅ 通过 |
+| Toast 提示 | 返回 `已同步 N 个核心字段` | ✅ 通过 |
+| 别名更新 | core_fields 别名正确包含列映射中的列名 | ✅ 通过 |
+| 属性保留 | 预置字段的 `required` 属性保持不变 | ✅ 通过 |
+
+**验收结论**：M7 里程碑全部功能验收通过。
+
+---
+
 ## ✅ PM 验收结论 (2026-02-23) — **回归后：核心验收通过**
 
 依据 `docs/OpsPilot_PRD.md` 第 6 节、`docs/QA_DEFECT_REPORT.md` 回归测试结论逐项核查：
@@ -379,7 +412,7 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 
 ## 📣 下一步指派
 
-**项目状态**: 🟢 M7 里程碑完成，核心字段同步功能上线
+**项目状态**: 🟢 M7 里程碑验收通过（2026-02-27 PM 验收）
 
 ### 致 Developer
 **已完成** ✅ 2026-02-26
@@ -432,11 +465,11 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 - [ ] **CF-T3** E2E 测试：同步按钮交互流程
 
 ### 致 PM
-**待验收** (M6 里程碑)
+**已完成** ✅ (M6 里程碑)
 - 启动验证：`python main.py web`
 - 功能验收：章节排序、操作类型、列映射、版本回滚、Excel 一键保存
 
-**待验收** 🆕 M7 里程碑（操作类型章节绑定 + 批量删除 + 核心字段同步）
+**已完成** ✅ M7 里程碑（2026-02-27 验收通过）
 - 操作类型章节绑定：章节切换、独立配置、数据兼容
 - 批量删除功能：章节/操作类型/列映射三页面批量删除
 - 核心字段同步：列映射页面「同步到核心字段」按钮、Toast 提示、解析器验证

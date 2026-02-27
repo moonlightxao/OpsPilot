@@ -20,6 +20,23 @@ CORE_FIELD_KEYWORDS = {
 }
 
 
+def _stringify_keys(obj: Any) -> Any:
+    """
+    递归地将字典键转换为字符串，确保与 JSON 兼容
+
+    Args:
+        obj: 任意 Python 对象
+
+    Returns:
+        转换后的对象（所有字典键都是字符串）
+    """
+    if isinstance(obj, dict):
+        return {str(k): _stringify_keys(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_stringify_keys(item) for item in obj]
+    return obj
+
+
 class ConfigService:
     """YAML 配置读写服务"""
 
@@ -50,7 +67,10 @@ class ConfigService:
             raise FileNotFoundError(f"配置文件不存在: {self.config_path}")
 
         with open(self.config_path, 'r', encoding='utf-8') as f:
-            self._config_cache = yaml.safe_load(f) or {}
+            raw_config = yaml.safe_load(f) or {}
+
+        # 将所有字典键转换为字符串，确保与 JSON 兼容
+        self._config_cache = _stringify_keys(raw_config)
 
         return self._config_cache
 
@@ -497,14 +517,16 @@ class ConfigService:
         同步规则：
         1. 遍历所有 Sheet 的 columns，收集去重后的列名列表
         2. 根据关键词匹配规则，将列名添加到对应核心字段的 aliases
-        3. 增量更新：仅添加新列名，不删除现有别名
-        4. 保持 required 属性不变
+        3. 未匹配的列名：创建自定义核心字段（字段名=列名，required=false）
+        4. 增量更新：仅添加新列名，不删除现有别名
+        5. 保持 required 属性不变
 
         Returns:
             同步结果 {
                 "synced_count": 同步的核心字段数量,
                 "updated_fields": 更新的字段列表,
-                "new_aliases": {字段名: [新增别名列表]}
+                "new_aliases": {字段名: [新增别名列表]},
+                "new_fields": [新创建的字段列表]
             }
         """
         config = self.load()
@@ -526,30 +548,60 @@ class ConfigService:
         result = {
             "synced_count": 0,
             "updated_fields": [],
-            "new_aliases": {}
+            "new_aliases": {},
+            "new_fields": []
         }
 
+        # 预置核心字段名列表（不创建同名的自定义字段）
+        predefined_fields = set(CORE_FIELD_KEYWORDS.keys())
+
         for column in all_columns:
-            matched_field = self._match_core_field(column)
+            # 跳过纯数字列名（如 Excel 日期序列号 46315）
+            if isinstance(column, (int, float)):
+                continue
+            # 确保列名是字符串
+            column_str = str(column) if not isinstance(column, str) else column
+            if not column_str.strip():
+                continue
+
+            matched_field = self._match_core_field(column_str)
+
             if matched_field and matched_field in core_fields:
-                # 获取当前 aliases
+                # 情况1: 匹配到预置核心字段，添加别名
                 current_aliases = set(core_fields[matched_field].get("aliases", []))
 
-                # 如果列名不在 aliases 中，添加
-                if column not in current_aliases:
-                    current_aliases.add(column)
+                if column_str not in current_aliases:
+                    current_aliases.add(column_str)
                     core_fields[matched_field]["aliases"] = list(current_aliases)
 
-                    # 记录结果
                     if matched_field not in result["new_aliases"]:
                         result["new_aliases"][matched_field] = []
-                    result["new_aliases"][matched_field].append(column)
+                    result["new_aliases"][matched_field].append(column_str)
 
                     if matched_field not in result["updated_fields"]:
                         result["updated_fields"].append(matched_field)
 
+            elif column_str not in core_fields:
+                # 情况2: 未匹配且不是已有字段，创建自定义核心字段
+                core_fields[column_str] = {
+                    "aliases": [column_str],
+                    "required": False,
+                    "custom": True  # 标记为自定义字段
+                }
+                result["new_fields"].append(column_str)
+
+                if column_str not in result["updated_fields"]:
+                    result["updated_fields"].append(column_str)
+
+            elif column_str in core_fields:
+                # 情况3: 列名已作为字段名存在，确保别名包含自己
+                current_aliases = set(core_fields[column_str].get("aliases", []))
+                if column_str not in current_aliases:
+                    current_aliases.add(column_str)
+                    core_fields[column_str]["aliases"] = list(current_aliases)
+
         # 4. 保存配置
-        if result["updated_fields"]:
+        if result["updated_fields"] or result["new_fields"]:
             config["core_fields"] = core_fields
             self.save(config)
             result["synced_count"] = len(result["updated_fields"])

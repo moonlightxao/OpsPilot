@@ -260,12 +260,12 @@ class TemplateRenderer:
             doc.add_paragraph()
         
         # 2.1 详细实施步骤
-        doc.add_heading('2.1 详细实施步骤', level=2)
+        doc.add_heading('2.1 详细实施步骤', level=3)
         sections = report.get('sections', [])
         sections_sorted = sorted(sections, key=lambda x: x.get('priority', 999))
-        
-        for section in sections_sorted:
-            self._render_section(doc, section)
+
+        for idx, section in enumerate(sections_sorted, start=1):
+            self._render_section(doc, section, idx)
         
         # ===== 第3部分：实施后验证计划 =====
         doc.add_heading('3 实施后验证计划', level=1)
@@ -378,11 +378,24 @@ class TemplateRenderer:
         
         doc.add_paragraph()
     
-    def _render_section(self, doc: Document, section: dict) -> None:
-        """渲染单个章节"""
+    def _render_section(self, doc: Document, section: dict, index: int) -> None:
+        """渲染单个章节
+
+        Args:
+            doc: Document 对象
+            section: 章节数据
+            index: 章节序号（从1开始）
+        """
         section_name = section.get('section_name', '未知章节')
-        doc.add_heading(section_name, level=1)
-        
+
+        # 生成带序号的标题：2.1.1 应用配置
+        heading_text = f"2.1.{index} {section_name}"
+        heading = doc.add_heading(heading_text, level=4)
+
+        # 移除斜体（Heading 4 默认可能是斜体）
+        for run in heading.runs:
+            run.italic = False
+
         action_groups = section.get('action_groups', [])
         columns = section.get('columns', [])
         
@@ -392,9 +405,9 @@ class TemplateRenderer:
             self._render_action_group(doc, columns, action_group)
     
     def _render_action_group(
-        self, 
-        doc: Document, 
-        columns: list, 
+        self,
+        doc: Document,
+        columns: list,
         action_group: dict
     ) -> None:
         """渲染操作组"""
@@ -402,12 +415,15 @@ class TemplateRenderer:
         instruction = action_group.get('instruction', f"执行以下{action_type}操作：")
         is_high_risk = action_group.get('is_high_risk', False)
         tasks = action_group.get('tasks', [])
-        
-        # 操作类型标题
-        heading = doc.add_heading(action_type, level=2)
+
+        # 操作类型说明（使用普通段落，加粗显示）
+        p = doc.add_paragraph()
+        run = p.add_run(f"【{action_type}】")
+        run.bold = True
         if is_high_risk:
-            run = heading.runs[0]
-            run.text = f"⚠️ {action_type}"
+            run = p.add_run(" ⚠️ 高危操作")
+            run.bold = True
+            run.font.color.rgb = None  # 保持默认颜色
         
         # 操作说明
         p = doc.add_paragraph()

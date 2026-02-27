@@ -4,9 +4,6 @@
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-lg font-semibold">Sheet 列映射配置</h3>
             <div class="flex gap-2">
-                <button onclick="syncCoreFields()" id="sync-core-fields-btn" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600">
-                    同步到核心字段
-                </button>
                 <button onclick="showBatchSaveModal()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
                     Excel 一键保存
                 </button>
@@ -251,8 +248,20 @@
         const sheetConfig = { columns, column_mapping: columnMapping };
         try {
             const res = await apiRequest(`/api/config/sheet-column-mapping/${encodeURIComponent(name)}`, 'PUT', sheetConfig);
-            if (res.success) { showToast('Sheet 映射保存成功', 'success'); closeSheetModal(); loadMappings(); }
-            else { showToast(res.error || '保存失败', 'error'); }
+            if (res.success) {
+                // 保存成功后自动同步核心字段
+                const syncRes = await apiRequest('/api/config/sync-core-fields', 'POST');
+                const syncCount = syncRes.success ? (syncRes.data?.synced_count || 0) : 0;
+                if (syncCount > 0) {
+                    showToast(`配置已保存，已同步 ${syncCount} 个核心字段`, 'success');
+                } else {
+                    showToast('配置已保存', 'success');
+                }
+                closeSheetModal();
+                loadMappings();
+            } else {
+                showToast(res.error || '保存失败', 'error');
+            }
         } catch (err) { showToast('保存失败', 'error'); }
     }
 
@@ -397,22 +406,34 @@
             showToast('请先上传 Excel 文件', 'error');
             return;
         }
-        
+
         const btn = document.getElementById('btn-batch-save');
         btn.disabled = true;
         btn.textContent = '保存中...';
-        
+
         try {
             const res = await apiRequest('/api/config/batch-save', 'POST', {
                 sheets: batchSaveData.sheets
             });
-            
+
             if (res.success) {
+                // 批量保存成功后自动同步核心字段
+                const syncRes = await apiRequest('/api/config/sync-core-fields', 'POST');
+
                 const updated = res.updated || {};
                 const mappingCount = (updated.sheet_column_mapping || []).length;
                 const chapterCount = (updated.priority_rules || []).length;
-                
-                showToast(`保存成功！更新 ${mappingCount} 个列映射，新增 ${chapterCount} 个章节`, 'success');
+                const syncCount = syncRes.success ? (syncRes.data?.synced_count || 0) : 0;
+
+                let message = `保存成功！更新 ${mappingCount} 个列映射`;
+                if (chapterCount > 0) {
+                    message += `，新增 ${chapterCount} 个章节`;
+                }
+                if (syncCount > 0) {
+                    message += `，同步 ${syncCount} 个核心字段`;
+                }
+
+                showToast(message, 'success');
                 closeBatchSaveModal();
                 loadMappings();
             } else {
@@ -423,41 +444,6 @@
         } finally {
             btn.disabled = false;
             btn.textContent = '保存到配置';
-        }
-    }
-
-    // ========== 核心字段同步 ==========
-    
-    async function syncCoreFields() {
-        const btn = document.getElementById('sync-core-fields-btn');
-        btn.disabled = true;
-        btn.textContent = '同步中...';
-        
-        try {
-            const res = await apiRequest('/api/config/sync-core-fields', 'POST');
-            
-            if (res.success) {
-                const data = res.data || {};
-                if (data.synced_count > 0) {
-                    showToast(`已同步 ${data.synced_count} 个核心字段`, 'success');
-                    // 如果有新增别名，在控制台显示详情
-                    if (data.new_aliases && Object.keys(data.new_aliases).length > 0) {
-                        const details = Object.entries(data.new_aliases)
-                            .map(([field, aliases]) => `${field}: ${aliases.join(', ')}`)
-                            .join('\n');
-                        console.log('新增别名:\n' + details);
-                    }
-                } else {
-                    showToast('无需同步，所有列名已存在于核心字段中', 'info');
-                }
-            } else {
-                showToast(res.error || '同步失败', 'error');
-            }
-        } catch (err) {
-            showToast('同步失败: ' + err.message, 'error');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = '同步到核心字段';
         }
     }
 </script>

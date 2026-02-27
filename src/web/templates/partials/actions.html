@@ -59,7 +59,9 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">步骤说明（支持富文本和图片）</label>
-                <textarea id="action-instruction" class="w-full border rounded px-3 py-2" style="min-height: 200px;" placeholder="在配置管理中心，点击新增按钮，新增以下配置："></textarea>
+                <div id="action-instruction-toolbar" class="border rounded-t bg-gray-50"></div>
+                <div id="action-instruction-editor" style="min-height: 200px; border: 1px solid #e5e7eb; border-top: none;"></div>
+                <input type="hidden" id="action-instruction">
             </div>
             <div class="flex items-center gap-4">
                 <label class="flex items-center">
@@ -259,6 +261,8 @@
         document.getElementById('action-high-risk-note').value = '';
         document.getElementById('high-risk-note-section').classList.add('hidden');
         document.getElementById('action-modal').classList.remove('hidden');
+        // 初始化 WangEditor（空内容）
+        setTimeout(() => initWangEditor(''), 50);
     }
 
     function closeActionModal() {
@@ -275,7 +279,7 @@
         const actions = actionLibrary[currentChapter] || {};
         const config = actions[name];
         if (!config) return;
-        
+
         editingAction = name;
         document.getElementById('action-modal-title').textContent = '编辑操作类型';
         document.getElementById('action-chapter').value = currentChapter;
@@ -286,6 +290,8 @@
         document.getElementById('action-high-risk-note').value = config.high_risk_note || '';
         toggleHighRiskNote();
         document.getElementById('action-modal').classList.remove('hidden');
+        // 初始化 WangEditor（加载已有内容）
+        setTimeout(() => initWangEditor(config.instruction || ''), 50);
     }
 
     // 保存操作类型
@@ -420,99 +426,81 @@
         }
     }
 
-    // TinyMCE 富文本编辑器初始化
-    let tinymceInitialized = false;
+    // ========== WangEditor 富文本编辑器 ==========
+    let wangEditorInstance = null;
 
-    function initTinyMCE() {
-        if (tinymceInitialized || typeof tinymce === 'undefined') return;
+    function initWangEditor(initialHtml = '') {
+        // 销毁旧实例
+        if (wangEditorInstance) {
+            wangEditorInstance.destroy();
+            wangEditorInstance = null;
+        }
 
-        tinymce.init({
-            selector: '#action-instruction',
-            height: 250,
-            menubar: false,
-            plugins: [
-                'advlist', 'autolink', 'lists', 'link', 'image', 'charmap',
-                'preview', 'anchor', 'searchreplace', 'visualblocks', 'code',
-                'fullscreen', 'insertdatetime', 'media', 'table', 'help', 'wordcount'
-            ],
-            toolbar: 'undo redo | formatselect | bold italic forecolor backcolor | ' +
-                     'alignleft aligncenter alignright alignjustify | ' +
-                     'bullist numlist outdent indent | link image | removeformat | help',
-            language: 'zh_CN',
-            language_url: 'https://cdn.jsdelivr.net/npm/tinymce-lang@6.8.3/langs6/zh_CN.min.js',
-            images_upload_url: '/api/upload/image',
-            images_upload_credentials: true,
-            automatic_uploads: true,
-            file_picker_types: 'image',
-            file_picker_callback: function(cb, value, meta) {
-                const input = document.createElement('input');
-                input.setAttribute('type', 'file');
-                input.setAttribute('accept', 'image/*');
-                input.onchange = function() {
-                    const file = this.files[0];
-                    const reader = new FileReader();
-                    reader.onload = function() {
-                        const id = 'blobid' + (new Date()).getTime();
-                        const blobCache = tinymce.activeEditor.editorUpload.blobCache;
-                        const base64 = reader.result.split(',')[1];
-                        const blobInfo = blobCache.create(id, file, base64);
-                        blobCache.add(blobInfo);
-                        cb(blobInfo.blobUri(), { title: file.name });
-                    };
-                    reader.readAsDataURL(file);
-                };
-                input.click();
+        const { createEditor, createToolbar } = window.wangEditor;
+        if (!createEditor) {
+            console.error('WangEditor 未加载');
+            return;
+        }
+
+        // 编辑器配置
+        const editorConfig = {
+            placeholder: '请输入操作说明...',
+            onChange(editor) {
+                // 内容变化时自动同步到隐藏 input
+                document.getElementById('action-instruction').value = editor.getHtml();
             },
-            setup: function(editor) {
-                editor.on('change', function() {
-                    editor.save();
-                });
+            MENU_CONF: {
+                uploadImage: {
+                    server: '/api/upload/image',
+                    fieldName: 'file',
+                    maxFileSize: 5 * 1024 * 1024, // 5MB
+                    allowedFileTypes: ['image/*'],
+                    customInsert(res, insertFn) {
+                        if (res.success && res.url) {
+                            insertFn(res.url, res.filename || '', '');
+                        }
+                    },
+                    onError(file, err) {
+                        showToast('图片上传失败: ' + err, 'error');
+                    }
+                }
             }
+        };
+
+        // 工具栏配置
+        const toolbarConfig = {
+            excludeKeys: [
+                'group-video',  // 排除视频
+                'codeView'      // 排除代码视图
+            ]
+        };
+
+        // 创建编辑器
+        wangEditorInstance = createEditor({
+            selector: '#action-instruction-editor',
+            html: initialHtml,
+            config: editorConfig,
+            mode: 'default'
         });
-        tinymceInitialized = true;
+
+        // 创建工具栏
+        createToolbar({
+            editor: wangEditorInstance,
+            selector: '#action-instruction-toolbar',
+            config: toolbarConfig,
+            mode: 'default'
+        });
     }
 
-    // 在弹窗打开时初始化 TinyMCE
-    function ensureTinyMCE() {
-        if (!tinymceInitialized) {
-            initTinyMCE();
+    // 设置编辑器内容
+    function setEditorContent(html) {
+        if (wangEditorInstance) {
+            wangEditorInstance.setHtml(html || '<p><br></p>');
         }
-        // 等待 TinyMCE 初始化完成
-        if (typeof tinymce !== 'undefined' && tinymce.get('action-instruction')) {
-            return Promise.resolve();
-        }
-        return new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    // 修改 showAddActionModal 以初始化 TinyMCE
-    const originalShowAddActionModal = showAddActionModal;
-    showAddActionModal = async function() {
-        originalShowAddActionModal();
-        await ensureTinyMCE();
-        if (typeof tinymce !== 'undefined' && tinymce.get('action-instruction')) {
-            tinymce.get('action-instruction').setContent('');
-        }
-    };
-
-    // 修改 editAction 以设置 TinyMCE 内容
-    const originalEditAction = editAction;
-    editAction = async function(name) {
-        originalEditAction(name);
-        await ensureTinyMCE();
-        const actions = actionLibrary[currentChapter] || {};
-        const config = actions[name];
-        if (config && typeof tinymce !== 'undefined' && tinymce.get('action-instruction')) {
-            tinymce.get('action-instruction').setContent(config.instruction || '');
-        }
-    };
-
-    // 修改 saveAction 以获取 TinyMCE 内容
-    const originalSaveAction = saveAction;
-    saveAction = async function() {
-        // 先保存 TinyMCE 内容到 textarea
-        if (typeof tinymce !== 'undefined' && tinymce.get('action-instruction')) {
-            tinymce.get('action-instruction').save();
-        }
-        await originalSaveAction();
-    };
+    // 获取编辑器内容
+    function getEditorContent() {
+        return wangEditorInstance ? wangEditorInstance.getHtml() : '';
+    }
 </script>

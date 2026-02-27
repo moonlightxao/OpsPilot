@@ -1,16 +1,194 @@
 # ============================================================
 # OpsPilot 规则配置文件
-# 最后更新: 2026-02-26 02:24:21
+# 最后更新: 2026-02-28 00:10:47
 # ============================================================
 
 priority_rules:
-  测试章节: 100
-  新章节: 100
+  应用配置: 10
+  容器配置: 20
+  MQS配置: 30
+  ROMA任务: 40
+  上线代码包清单: 50
 action_library:
   默认:
     测试操作:
       instruction: 测试操作说明
       is_high_risk: false
       render_table: true
-sheet_column_mapping: {}
+  test_chapter:
+    test_action:
+      instruction: test instruction
+      is_high_risk: false
+      render_table: true
+  another_chapter: {}
+  应用配置:
+    新增:
+      instruction: <p>在应用配置中心新增配置</p>
+      is_high_risk: false
+      render_table: true
+      high_risk_note: null
+sheet_column_mapping:
+  应用配置:
+    columns:
+    - 操作类型
+    - 部署单元
+    - 键
+    - 值
+    - 实施人
+    - 复核人
+    column_mapping:
+      操作类型:
+      - 操作类型
+      部署单元:
+      - 部署单元
+      键:
+      - 键
+      值:
+      - 值
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
+  容器配置:
+    columns:
+    - 操作类型
+    - 部署单元
+    - 参数
+    - 值
+    - 实施人
+    - 复核人
+    column_mapping:
+      操作类型:
+      - 操作类型
+      部署单元:
+      - 部署单元
+      参数:
+      - 参数
+      值:
+      - 值
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
+  MQS配置:
+    columns:
+    - 操作类型
+    - TOPIC名称
+    - 应用名称
+    - 实施人
+    - 复核人
+    column_mapping:
+      操作类型:
+      - 操作类型
+      TOPIC名称:
+      - TOPIC名称
+      应用名称:
+      - 应用名称
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
+  ROMA任务:
+    columns:
+    - 应用名称
+    - 任务名称
+    - 操作
+    - 实施人
+    - 复核人
+    column_mapping:
+      应用名称:
+      - 应用名称
+      任务名称:
+      - 任务名称
+      操作:
+      - 操作
+      实施人:
+      - 实施人
+      复核人:
+      - 复核人
 high_risk_keywords: []
+core_fields:
+  action_type:
+    aliases:
+    - 操作
+    - Action
+    - 操作类型
+    - action_type
+    required: true
+  deploy_unit:
+    aliases:
+    - 应用名称
+    - 服务名
+    - 应用名
+    - 部署单元
+    required: false
+  executor:
+    aliases:
+    - 复核人
+    - 负责人
+    - 执行人
+    - 实施人
+    required: false
+  external_link:
+    aliases:
+    - 外部链接
+    - 链接
+    - URL
+    required: false
+  task_name:
+    aliases:
+    - task_name
+    - 任务名称
+    - 任务名
+    - 任务
+    required: false
+  键:
+    aliases:
+    - 键
+    required: false
+    custom: true
+  值:
+    aliases:
+    - 值
+    required: false
+    custom: true
+  参数:
+    aliases:
+    - 参数
+    required: false
+    custom: true
+  TOPIC名称:
+    aliases:
+    - TOPIC名称
+    required: false
+    custom: true
+  部署资源名:
+    aliases:
+    - 部署资源名
+    required: false
+    custom: true
+  包类型:
+    aliases:
+    - 包类型
+    required: false
+    custom: true
+  是否完成:
+    aliases:
+    - 是否完成
+    required: false
+    custom: true
+  包名:
+    aliases:
+    - 包名
+    required: false
+    custom: true
+  任务序号:
+    aliases:
+    - 任务序号
+    required: false
+    custom: true
+  任务:
+    aliases:
+    - 任务
+    required: false
+    custom: true

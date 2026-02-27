@@ -29,6 +29,7 @@ def create_app(config_path: str = "config/rules.yaml") -> Flask:
     app.config['SECRET_KEY'] = 'opspilot-web-config-secret'
     app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB
     app.config['CONFIG_PATH'] = config_path
+    app.config['TEMPLATES_AUTO_RELOAD'] = True  # 禁用模板缓存
 
     # 注册蓝图
     from .routes import config_bp, backup_bp, upload_bp
