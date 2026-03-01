@@ -210,6 +210,29 @@ fastmcp>=0.1.0
 - [x] **CF-F1** 列映射页面：底部增加「同步到核心字段」按钮 ✅ 2026-02-26
 - [x] **CF-F2** 同步交互：点击按钮调用 API，显示 Toast 提示同步结果 ✅ 2026-02-26
 
+### 2.11 Excel 一键保存全量覆盖模式 (Owner: Developer) 🆕
+**需求来源**: 用户反馈 Excel 一键保存后配置累积/膨胀
+
+**需求背景**:
+- 当前 `batch_save_sheets` 采用增量更新模式
+- 历史配置无法自动清理
+- 用户期望基于 Excel 内容全量覆盖配置
+
+**技术方案**: `docs/TECH_DESIGN_BATCH_SAVE_V5.md`
+
+**后端任务**:
+- [x] **V5-B1** ConfigService 重构：`batch_save_sheets` 全量覆盖 `sheet_column_mapping` ✅ 2026-03-01
+- [x] **V5-B2** ConfigService 重构：`batch_save_sheets` 全量覆盖 `priority_rules`，按顺序分配优先级 ✅ 2026-03-01
+- [x] **V5-B3** ConfigService 重构：新增 `_sync_core_fields_full` 全量重新生成 `core_fields` ✅ 2026-03-01
+- [x] **V5-B4** API 返回值扩展：增加 `deleted` 字段记录被删除的配置项 ✅ 2026-03-01
+
+**测试任务**:
+- [x] **V5-T1** 单元测试：上传包含 Sheet A、B、C 的 Excel，验证 `sheet_column_mapping` 仅包含 A、B、C ✅ 2026-03-01
+- [x] **V5-T2** 单元测试：原有配置包含 Sheet D、E,上传 Excel 后验证 D、E 被删除 ✅ 2026-03-01
+- [x] **V5-T3** 单元测试：验证 `action_library` 保持不变 ✅ 2026-03-01
+- [x] **V5-T4** 单元测试:验证 `priority_rules` 按 Sheet 顺序分配(10, 20, 30...) ✅ 2026-03-01
+- [x] **V5-T5** 单元测试:验证 `core_fields` 基于新列名重新生成,旧字段被清理 ✅ 2026-03-01
+
 ### 3. 质量保障 (Owner: Tester)
 - [x] **单元测试**：Parser 30/30 通过，Renderer 22/22 全部通过 ✅ 2026-02-18
 - [x] **边界测试**：空文件、缺失字段、非法字符处理已覆盖 ✅ 2026-02-18
@@ -296,6 +319,10 @@ fastmcp>=0.1.0
 - **2026-02-27 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_WEB_CONFIG_V4.md`，定义 WangEditor 替换方案、自动同步实现方案 | 包含 7 项开发任务、8 项测试任务 | 产出物：TECH_DESIGN_WEB_CONFIG_V4.md | 待 Developer 实现
 - **2026-02-27 [Developer]** V4 方案实现完成：TinyMCE 替换为 WangEditor、列映射保存时自动同步核心字段 | 7 项任务全部完成，服务验证通过 | 产出物：base.html、actions.html、columns.html、app.py
 - **2026-02-27 [Developer]** Bug 修复：1) YAML 预览报错（数字键导致排序失败）；2) core_fields 同步失败（非字符串列名处理） | 添加 `_stringify_keys` 函数、修复 `_match_core_field` 类型检查 | 产出物：config_service.py
+- **2026-03-01 [PM]** 需求细化：Excel 一键保存从增量更新改为全量覆盖模式 | 问题背景：用户反馈配置累积/膨胀 | 更新 OpsPilot_PRD.md 3.4.3-C 节、6.2 节 | 待 Architect 技术方案设计
+- **2026-03-01 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_BATCH_SAVE_V5.md`，定义全量覆盖模式实现方案 | 包含 4 项后端任务、5 项测试任务 | 产出物：TECH_DESIGN_BATCH_SAVE_V5.md | 待 Developer 实现
+- **2026-03-01 [Developer]** V5 后端任务完成：重构 batch_save_sheets 全量覆盖模式、新增 _sync_core_fields_full 方法、API 返回值扩展 | 4 项后端任务全部完成 | 139 passed, 3 skipped | 产出物：config_service.py、config.py
+- **2026-03-01 [Tester]** V5 测试完成：5 项测试任务全部通过 | 新增 test_batch_save_v5.py | 验收通过
 
 ---
 
@@ -438,6 +465,16 @@ Excel → Parser → report.json v2.0 (人工确认) → docxtpl → template.do
 - **后端任务**: CF-B1 ~ CF-B3（3 项）
 - **前端任务**: CF-F1 ~ CF-F2（2 项）
 - **交互**: 列映射页面新增「同步到核心字段」按钮，手动触发同步
+
+**待开发** 🆕 2.11 阶段（Excel 一键保存全量覆盖模式）
+- **技术方案**: `docs/TECH_DESIGN_BATCH_SAVE_V5.md`
+- **需求背景**: 用户反馈 Excel 一键保存后配置累积/膨胀
+- **后端任务**: V5-B1 ~ V5-B4（4 项）
+  - V5-B1: `batch_save_sheets` 全量覆盖 `sheet_column_mapping`
+  - V5-B2: `batch_save_sheets` 全量覆盖 `priority_rules`
+  - V5-B3: `sync_core_fields_from_columns` 全量重新生成 `core_fields`
+  - V5-B4: API 返回值扩展（增加 `deleted` 字段）
+- **核心改动**: 从增量更新改为全量覆盖模式，保留 `action_library` 不变
 
 **产出物**:
 - `src/web/services/config_service.py` - ConfigService V2 扩展（章节操作类型、批量删除、格式迁移）
