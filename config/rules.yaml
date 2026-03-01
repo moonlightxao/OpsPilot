@@ -1,6 +1,6 @@
 # ============================================================
 # OpsPilot 规则配置文件
-# 最后更新: 2026-03-01 17:17:30
+# 最后更新: 2026-03-01 17:39:17
 # ============================================================
 
 priority_rules:
@@ -180,7 +180,7 @@ core_fields:
     aliases:
     - 操作类型
     - 操作
-    required: true
+    required: false
   task_name:
     aliases:
     - 任务名称
@@ -191,7 +191,6 @@ core_fields:
     aliases:
     - 应用名称
     - 部署单元
-    - 应用名
     required: false
   external_link:
     aliases: []

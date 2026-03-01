@@ -741,11 +741,11 @@ class ConfigService:
         return None
 
     def _get_default_core_fields(self) -> dict:
-        """获取默认的核心字段配置"""
+        """获取默认的核心字段配置（所有字段均为非必填）"""
         return {
             "action_type": {
                 "aliases": ["操作类型", "操作", "Action"],
-                "required": True
+                "required": False
             },
             "deploy_unit": {
                 "aliases": ["部署单元", "应用名", "服务名"],
@@ -760,8 +760,8 @@ class ConfigService:
                 "required": False
             },
             "task_name": {
-                "aliases": ["任务名", "任务名称"],
-                "required": True
+                "aliases": ["任务名", "任务名称", "任务"],
+                "required": False
             }
         }
 
