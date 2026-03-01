@@ -15,7 +15,7 @@ CORE_FIELD_KEYWORDS = {
     "action_type": ["操作类型", "操作", "action"],
     "deploy_unit": ["部署单元", "应用名", "服务名", "应用名称"],
     "executor": ["执行人", "实施人", "负责人", "复核人"],
-    "task_name": ["任务名", "任务名称", "task"],
+    "task_name": ["任务名", "任务名称", "任务", "task"],
     "external_link": ["外部链接", "链接", "url"]
 }
 
@@ -812,9 +812,10 @@ class ConfigService:
                         result["skipped"][chapter] = []
                     result["skipped"][chapter].append(action_name)
                 else:
-                    # 新增或覆盖
+                    # 新增或覆盖 - 生成默认模板
+                    default_instruction = self._generate_default_instruction(action_name)
                     action_library[chapter][action_name] = {
-                        "instruction": action_name,
+                        "instruction": default_instruction,
                         "is_high_risk": False,
                         "render_table": True
                     }
@@ -836,3 +837,33 @@ class ConfigService:
     def get_action_library(self) -> Dict[str, Dict[str, Any]]:
         """获取操作类型配置"""
         return self.get("action_library", {})
+
+    def _generate_default_instruction(self, action_name: str) -> str:
+        """
+        生成操作类型的默认步骤模板
+
+        Args:
+            action_name: 操作类型名称
+
+        Returns:
+            默认步骤模板文本
+        """
+        template = f"""【{action_name}操作说明】
+
+1. 操作目的：
+   - 请在此填写{action_name}操作的目的和预期效果
+
+2. 前置条件：
+   - 请确认操作所需的前置条件（如权限、环境等）
+
+3. 操作步骤：
+   - 步骤1：请在此填写具体操作步骤
+   - 步骤2：请在此填写具体操作步骤
+   - 步骤3：请在此填写具体操作步骤
+
+4. 验证方法：
+   - 请在此填写如何验证操作是否成功
+
+5. 回滚方案：
+   - 如操作失败，请在此填写回滚方法"""
+        return template

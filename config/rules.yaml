@@ -1,6 +1,6 @@
 # ============================================================
 # OpsPilot 规则配置文件
-# 最后更新: 2026-02-28 00:10:47
+# 最后更新: 2026-03-01 17:17:30
 # ============================================================
 
 priority_rules:
@@ -10,23 +10,87 @@ priority_rules:
   ROMA任务: 40
   上线代码包清单: 50
 action_library:
-  默认:
-    测试操作:
-      instruction: 测试操作说明
+  MQS配置:
+    新增:
+      instruction: 新增
       is_high_risk: false
       render_table: true
-  test_chapter:
-    test_action:
-      instruction: test instruction
+    删除:
+      instruction: 删除
       is_high_risk: false
       render_table: true
-  another_chapter: {}
+    新增授权:
+      instruction: 新增授权
+      is_high_risk: false
+      render_table: true
+    删除授权:
+      instruction: 删除授权
+      is_high_risk: false
+      render_table: true
+  ROMA任务:
+    新增:
+      instruction: 新增
+      is_high_risk: false
+      render_table: true
+    删除:
+      instruction: 删除
+      is_high_risk: false
+      render_table: true
+    修改:
+      instruction: 修改
+      is_high_risk: false
+      render_table: true
+    上线:
+      instruction: 上线
+      is_high_risk: false
+      render_table: true
+    下线:
+      instruction: 下线
+      is_high_risk: false
+      render_table: true
+  上线代码包清单:
+    自动部署:
+      instruction: 自动部署
+      is_high_risk: false
+      render_table: true
+  容器配置:
+    新增:
+      instruction: 新增
+      is_high_risk: false
+      render_table: true
+    修改:
+      instruction: 修改
+      is_high_risk: false
+      render_table: true
+    删除:
+      instruction: 删除
+      is_high_risk: false
+      render_table: true
+    发布:
+      instruction: 发布
+      is_high_risk: false
+      render_table: true
   应用配置:
     新增:
-      instruction: <p>在应用配置中心新增配置</p>
+      instruction: 新增
       is_high_risk: false
       render_table: true
-      high_risk_note: null
+    删除:
+      instruction: 删除
+      is_high_risk: false
+      render_table: true
+    修改:
+      instruction: 修改
+      is_high_risk: false
+      render_table: true
+    发布:
+      instruction: 发布
+      is_high_risk: false
+      render_table: true
+    取消发布:
+      instruction: 取消发布
+      is_high_risk: false
+      render_table: true
 sheet_column_mapping:
   应用配置:
     columns:
@@ -106,45 +170,35 @@ sheet_column_mapping:
       - 实施人
       复核人:
       - 复核人
-high_risk_keywords: []
 core_fields:
-  action_type:
-    aliases:
-    - 操作
-    - Action
-    - 操作类型
-    - action_type
-    required: true
-  deploy_unit:
-    aliases:
-    - 应用名称
-    - 服务名
-    - 应用名
-    - 部署单元
-    required: false
   executor:
     aliases:
     - 复核人
-    - 负责人
-    - 执行人
     - 实施人
     required: false
-  external_link:
+  action_type:
     aliases:
-    - 外部链接
-    - 链接
-    - URL
-    required: false
+    - 操作类型
+    - 操作
+    required: true
   task_name:
     aliases:
-    - task_name
     - 任务名称
     - 任务名
     - 任务
     required: false
-  键:
+  deploy_unit:
     aliases:
-    - 键
+    - 应用名称
+    - 部署单元
+    - 应用名
+    required: false
+  external_link:
+    aliases: []
+    required: false
+  包类型:
+    aliases:
+    - 包类型
     required: false
     custom: true
   值:
@@ -152,29 +206,9 @@ core_fields:
     - 值
     required: false
     custom: true
-  参数:
+  任务:
     aliases:
-    - 参数
-    required: false
-    custom: true
-  TOPIC名称:
-    aliases:
-    - TOPIC名称
-    required: false
-    custom: true
-  部署资源名:
-    aliases:
-    - 部署资源名
-    required: false
-    custom: true
-  包类型:
-    aliases:
-    - 包类型
-    required: false
-    custom: true
-  是否完成:
-    aliases:
-    - 是否完成
+    - 任务
     required: false
     custom: true
   包名:
@@ -182,13 +216,43 @@ core_fields:
     - 包名
     required: false
     custom: true
+  参数:
+    aliases:
+    - 参数
+    required: false
+    custom: true
+  是否完成:
+    aliases:
+    - 是否完成
+    required: false
+    custom: true
+  TOPIC名称:
+    aliases:
+    - TOPIC名称
+    required: false
+    custom: true
+  '46315':
+    aliases:
+    - '46315'
+    required: false
+    custom: true
+  键:
+    aliases:
+    - 键
+    required: false
+    custom: true
+  部署资源名:
+    aliases:
+    - 部署资源名
+    required: false
+    custom: true
+  '46316':
+    aliases:
+    - '46316'
+    required: false
+    custom: true
   任务序号:
     aliases:
     - 任务序号
-    required: false
-    custom: true
-  任务:
-    aliases:
-    - 任务
     required: false
     custom: true
