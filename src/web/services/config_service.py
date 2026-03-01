@@ -446,40 +446,39 @@ class ConfigService:
         """
         批量保存 Sheet 配置（用于 Excel 一键保存功能）
 
+        V5 更新：全量覆盖模式
+        - sheet_column_mapping：基于 Excel 完全重新生成，删除不存在的 Sheet
+        - priority_rules：基于 Excel 完全重新生成（跳过第一个 Sheet），删除不存在的章节
+        - action_library：保持不变
+        - 自动调用 sync_core_fields_from_columns 进行全量同步
+
         规则：
         1. 第一个 Sheet (上线安排) 跳过章节排序，仅保存列映射
-        2. 其他 Sheet：
-           - 列映射：始终更新 sheet_column_mapping
-           - 章节排序：仅当 Sheet 名称不存在时才新增
-        3. 新增章节的优先级 = 当前最大优先级 + 10
+        2. 其他 Sheet：按顺序分配优先级（10, 20, 30...）
+        3. 全量覆盖：原有配置中不存在于 Excel 的 Sheet/章节将被删除
 
         Args:
             sheets: Sheet 列表，每个元素包含 name, columns, is_first_sheet
 
         Returns:
-            更新结果 {"sheet_column_mapping": [...], "priority_rules": [...]}
+            更新结果 {
+                "updated": {"sheet_column_mapping": [...], "priority_rules": [...]},
+                "deleted": {"sheet_column_mapping": [...], "priority_rules": [...], "core_fields": [...]}
+            }
         """
         config = self.load()
-        updated = {"sheet_column_mapping": [], "priority_rules": []}
 
-        # 确保 sheet_column_mapping 存在
-        if "sheet_column_mapping" not in config:
-            config["sheet_column_mapping"] = {}
+        # 记录原有配置（用于计算被删除的项）
+        old_sheet_mapping = set(config.get("sheet_column_mapping", {}).keys())
+        old_priority_rules = set(config.get("priority_rules", {}).keys())
 
-        # 确保 priority_rules 存在且为 dict
-        if "priority_rules" not in config:
-            config["priority_rules"] = {}
+        # 全量重新生成 sheet_column_mapping
+        new_sheet_mapping = {}
+        new_priority_rules = {}
+        updated_sheets = []
+        updated_priorities = []
 
-        # 获取当前最大优先级
-        priority_rules = config.get("priority_rules", {})
-        if isinstance(priority_rules, dict) and priority_rules:
-            max_priority = max(priority_rules.values())
-        else:
-            max_priority = 0
-            # 如果 priority_rules 不是 dict，重置为 dict
-            if not isinstance(priority_rules, dict):
-                config["priority_rules"] = {}
-                priority_rules = {}
+        priority_counter = 0
 
         for sheet in sheets:
             name = sheet.get("name")
@@ -489,72 +488,95 @@ class ConfigService:
             if not name:
                 continue
 
-            # 1. 更新列映射（列名同时作为标准列名和别名）
-            column_mapping = {col: [col] for col in columns}
-            config["sheet_column_mapping"][name] = {
-                "columns": columns,
+            # 1. 生成列映射（列名同时作为标准列名和别名）
+            column_mapping = {str(col): [str(col)] for col in columns}
+            new_sheet_mapping[name] = {
+                "columns": [str(col) for col in columns],
                 "column_mapping": column_mapping
             }
-            updated["sheet_column_mapping"].append(name)
+            updated_sheets.append(name)
 
-            # 2. 更新章节排序（仅非第一个 Sheet 且不存在时）
+            # 2. 生成章节排序（仅非第一个 Sheet）
             if not is_first:
-                if name not in priority_rules:
-                    max_priority += 10
-                    config["priority_rules"][name] = max_priority
-                    priority_rules[name] = max_priority
-                    updated["priority_rules"].append(name)
+                priority_counter += 10
+                new_priority_rules[name] = priority_counter
+                updated_priorities.append(name)
 
+        # 计算被删除的项
+        new_sheet_names = set(new_sheet_mapping.keys())
+        new_priority_names = set(new_priority_rules.keys())
+        deleted_sheets = list(old_sheet_mapping - new_sheet_names)
+        deleted_priorities = list(old_priority_rules - new_priority_names)
+
+        # 全量覆盖配置
+        config["sheet_column_mapping"] = new_sheet_mapping
+        config["priority_rules"] = new_priority_rules
+
+        # 保存配置（在同步 core_fields 之前）
         self.save(config)
-        return updated
+
+        # 全量同步 core_fields
+        sync_result = self._sync_core_fields_full(config, new_sheet_mapping)
+
+        return {
+            "updated": {
+                "sheet_column_mapping": updated_sheets,
+                "priority_rules": updated_priorities
+            },
+            "deleted": {
+                "sheet_column_mapping": deleted_sheets,
+                "priority_rules": deleted_priorities,
+                "core_fields": sync_result.get("deleted", [])
+            }
+        }
 
     # ========== 核心字段同步相关 ==========
 
-    def sync_core_fields_from_columns(self) -> dict:
+    def _sync_core_fields_full(self, config: dict, sheet_column_mapping: dict) -> dict:
         """
-        从 sheet_column_mapping 同步列名到 core_fields
+        全量重新生成 core_fields（V5 新增）
 
         同步规则：
-        1. 遍历所有 Sheet 的 columns，收集去重后的列名列表
-        2. 根据关键词匹配规则，将列名添加到对应核心字段的 aliases
-        3. 未匹配的列名：创建自定义核心字段（字段名=列名，required=false）
-        4. 增量更新：仅添加新列名，不删除现有别名
-        5. 保持 required 属性不变
+        1. 保留预置核心字段的 required 属性
+        2. 完全基于当前列名重新生成 core_fields
+        3. 删除不存在的自定义字段
+        4. 预置字段的别名完全基于当前列名重新生成
+
+        Args:
+            config: 配置字典
+            sheet_column_mapping: 新的 sheet_column_mapping
 
         Returns:
-            同步结果 {
-                "synced_count": 同步的核心字段数量,
-                "updated_fields": 更新的字段列表,
-                "new_aliases": {字段名: [新增别名列表]},
-                "new_fields": [新创建的字段列表]
-            }
+            同步结果 {"synced_count": int, "deleted": [...]}
         """
-        config = self.load()
-
         # 1. 收集所有列名并去重
         all_columns = set()
-        sheet_column_mapping = config.get("sheet_column_mapping", {})
         for sheet_name, sheet_config in sheet_column_mapping.items():
             columns = sheet_config.get("columns", [])
             all_columns.update(columns)
 
-        # 2. 初始化 core_fields（如果不存在）
-        if "core_fields" not in config:
-            config["core_fields"] = self._get_default_core_fields()
+        # 2. 获取原有 core_fields 中的自定义字段（用于计算删除）
+        old_core_fields = config.get("core_fields", {})
+        old_custom_fields = set(
+            name for name, field in old_core_fields.items()
+            if field.get("custom", False)
+        )
 
-        core_fields = config["core_fields"]
+        # 3. 重新生成 core_fields
+        new_core_fields = {}
 
-        # 3. 遍历列名，根据关键词匹配到核心字段
-        result = {
-            "synced_count": 0,
-            "updated_fields": [],
-            "new_aliases": {},
-            "new_fields": []
-        }
-
-        # 预置核心字段名列表（不创建同名的自定义字段）
+        # 预置核心字段名列表
         predefined_fields = set(CORE_FIELD_KEYWORDS.keys())
 
+        # 先初始化预置字段（保留 required 属性）
+        for field_name in predefined_fields:
+            default_config = self._get_default_core_fields().get(field_name, {})
+            new_core_fields[field_name] = {
+                "aliases": [],
+                "required": default_config.get("required", False)
+            }
+
+        # 4. 根据列名填充 aliases
         for column in all_columns:
             # 跳过纯数字列名（如 Excel 日期序列号 46315）
             if isinstance(column, (int, float)):
@@ -566,45 +588,136 @@ class ConfigService:
 
             matched_field = self._match_core_field(column_str)
 
-            if matched_field and matched_field in core_fields:
+            if matched_field and matched_field in new_core_fields:
                 # 情况1: 匹配到预置核心字段，添加别名
-                current_aliases = set(core_fields[matched_field].get("aliases", []))
-
-                if column_str not in current_aliases:
-                    current_aliases.add(column_str)
-                    core_fields[matched_field]["aliases"] = list(current_aliases)
-
-                    if matched_field not in result["new_aliases"]:
-                        result["new_aliases"][matched_field] = []
-                    result["new_aliases"][matched_field].append(column_str)
-
-                    if matched_field not in result["updated_fields"]:
-                        result["updated_fields"].append(matched_field)
-
-            elif column_str not in core_fields:
-                # 情况2: 未匹配且不是已有字段，创建自定义核心字段
-                core_fields[column_str] = {
+                new_core_fields[matched_field]["aliases"].append(column_str)
+            elif column_str not in predefined_fields:
+                # 情况2: 未匹配且不是预置字段，创建自定义核心字段
+                new_core_fields[column_str] = {
                     "aliases": [column_str],
                     "required": False,
-                    "custom": True  # 标记为自定义字段
+                    "custom": True
+                }
+
+        # 5. 计算被删除的自定义字段
+        new_custom_fields = set(
+            name for name, field in new_core_fields.items()
+            if field.get("custom", False)
+        )
+        deleted_fields = list(old_custom_fields - new_custom_fields)
+
+        # 6. 保存配置（使用统一的 save 方法）
+        config["core_fields"] = new_core_fields
+        self.save(config)
+
+        return {
+            "synced_count": len([f for f in new_core_fields.values() if f.get("aliases")]),
+            "deleted": deleted_fields
+        }
+
+    def sync_core_fields_from_columns(self) -> dict:
+        """
+        从 sheet_column_mapping 同步列名到 core_fields
+
+        V5 更新：全量重新生成模式
+        - 保留预置核心字段的 required 属性
+        - 完全基于当前列名重新生成 core_fields
+        - 删除不存在的自定义字段
+
+        Returns:
+            同步结果 {
+                "synced_count": 同步的核心字段数量,
+                "updated_fields": 更新的字段列表,
+                "new_aliases": {字段名: [新增别名列表]},
+                "new_fields": [新创建的字段列表],
+                "deleted": [被删除的字段列表]
+            }
+        """
+        config = self.load()
+        sheet_column_mapping = config.get("sheet_column_mapping", {})
+
+        # 1. 收集所有列名并去重
+        all_columns = set()
+        for sheet_name, sheet_config in sheet_column_mapping.items():
+            columns = sheet_config.get("columns", [])
+            all_columns.update(columns)
+
+        # 2. 获取原有 core_fields（用于计算变更）
+        old_core_fields = config.get("core_fields", {})
+        old_custom_fields = set(
+            name for name, field in old_core_fields.items()
+            if field.get("custom", False)
+        )
+
+        # 3. 重新生成 core_fields
+        new_core_fields = {}
+
+        # 预置核心字段名列表
+        predefined_fields = set(CORE_FIELD_KEYWORDS.keys())
+
+        # 先初始化预置字段（保留 required 属性）
+        for field_name in predefined_fields:
+            old_required = old_core_fields.get(field_name, {}).get("required", False)
+            default_config = self._get_default_core_fields().get(field_name, {})
+            new_core_fields[field_name] = {
+                "aliases": [],
+                "required": old_required if field_name in old_core_fields else default_config.get("required", False)
+            }
+
+        result = {
+            "synced_count": 0,
+            "updated_fields": [],
+            "new_aliases": {},
+            "new_fields": [],
+            "deleted": []
+        }
+
+        # 4. 根据列名填充 aliases
+        for column in all_columns:
+            # 跳过纯数字列名（如 Excel 日期序列号 46315）
+            if isinstance(column, (int, float)):
+                continue
+            # 确保列名是字符串
+            column_str = str(column) if not isinstance(column, str) else column
+            if not column_str.strip():
+                continue
+
+            matched_field = self._match_core_field(column_str)
+
+            if matched_field and matched_field in new_core_fields:
+                # 情况1: 匹配到预置核心字段，添加别名
+                new_core_fields[matched_field]["aliases"].append(column_str)
+
+                if matched_field not in result["new_aliases"]:
+                    result["new_aliases"][matched_field] = []
+                result["new_aliases"][matched_field].append(column_str)
+
+                if matched_field not in result["updated_fields"]:
+                    result["updated_fields"].append(matched_field)
+
+            elif column_str not in predefined_fields:
+                # 情况2: 未匹配且不是预置字段，创建自定义核心字段
+                new_core_fields[column_str] = {
+                    "aliases": [column_str],
+                    "required": False,
+                    "custom": True
                 }
                 result["new_fields"].append(column_str)
 
                 if column_str not in result["updated_fields"]:
                     result["updated_fields"].append(column_str)
 
-            elif column_str in core_fields:
-                # 情况3: 列名已作为字段名存在，确保别名包含自己
-                current_aliases = set(core_fields[column_str].get("aliases", []))
-                if column_str not in current_aliases:
-                    current_aliases.add(column_str)
-                    core_fields[column_str]["aliases"] = list(current_aliases)
+        # 5. 计算被删除的自定义字段
+        new_custom_fields = set(
+            name for name, field in new_core_fields.items()
+            if field.get("custom", False)
+        )
+        result["deleted"] = list(old_custom_fields - new_custom_fields)
 
-        # 4. 保存配置
-        if result["updated_fields"] or result["new_fields"]:
-            config["core_fields"] = core_fields
-            self.save(config)
-            result["synced_count"] = len(result["updated_fields"])
+        # 6. 保存配置
+        config["core_fields"] = new_core_fields
+        self.save(config)
+        result["synced_count"] = len([f for f in new_core_fields.values() if f.get("aliases")])
 
         return result
 

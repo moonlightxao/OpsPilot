@@ -388,7 +388,14 @@ def delete_sheet_mapping(sheet_name: str):
 
 @config_bp.route('/batch-save', methods=['POST'])
 def batch_save_sheets():
-    """批量保存 Sheet 配置"""
+    """
+    批量保存 Sheet 配置（V5 全量覆盖模式）
+
+    V5 更新：
+    - 全量覆盖 sheet_column_mapping 和 priority_rules
+    - 全量重新生成 core_fields
+    - 返回 updated 和 deleted 信息
+    """
     try:
         data = request.get_json()
         if not data:
@@ -404,12 +411,20 @@ def batch_save_sheets():
         from ..services import BackupService
         BackupService().create_backup()
 
-        updated = config_service.batch_save_sheets(sheets)
+        result = config_service.batch_save_sheets(sheets)
+
+        # 构建响应消息
+        message_parts = ["配置已保存"]
+        if result.get("deleted", {}).get("sheet_column_mapping"):
+            message_parts.append(f"已清理 {len(result['deleted']['sheet_column_mapping'])} 个废弃 Sheet 配置")
+        if result.get("deleted", {}).get("core_fields"):
+            message_parts.append(f"已清理 {len(result['deleted']['core_fields'])} 个废弃核心字段")
 
         return jsonify({
             "success": True,
-            "message": "配置已保存",
-            "updated": updated
+            "message": "，".join(message_parts),
+            "updated": result.get("updated", {}),
+            "deleted": result.get("deleted", {})
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
