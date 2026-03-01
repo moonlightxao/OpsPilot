@@ -233,6 +233,31 @@ fastmcp>=0.1.0
 - [x] **V5-T4** 单元测试:验证 `priority_rules` 按 Sheet 顺序分配(10, 20, 30...) ✅ 2026-03-01
 - [x] **V5-T5** 单元测试:验证 `core_fields` 基于新列名重新生成,旧字段被清理 ✅ 2026-03-01
 
+### 2.12 Excel 导入自动识别操作类型 (Owner: Developer) 🆕
+**需求来源**: 用户需求：导入 Excel 后自动识别每个 Sheet 的操作类型列并保存
+
+**需求背景**:
+- 当前导入 Excel 仅保存列映射和章节排序
+- 用户希望自动识别「操作类型」列的值并保存到 action_library
+- 同名操作类型需用户确认覆盖/跳过
+
+**技术方案**: `docs/TECH_DESIGN_ACTION_TYPE_RECOGNITION_V6.md`
+
+**后端任务**:
+- [x] **V6-B1** 修改预览 API：`/api/upload/excel/preview` 返回识别到的操作类型列表 ✅ 2026-03-01
+- [x] **V6-B2** ConfigService 扩展：新增 `batch_save_action_types` 方法 ✅ 2026-03-01
+- [x] **V6-B3** API 扩展：新增 `/api/config/batch-save-action-types` 端点 ✅ 2026-03-01
+- [x] **V6-B4** 保存逻辑：处理覆盖/跳过标记 ✅ 2026-03-01
+
+**前端任务**:
+- [x] **V6-F1** 预览界面：展示识别到的操作类型列表（按 Sheet 分组） ✅ 2026-03-01
+- [x] **V6-F2** 冲突交互：已存在的操作类型显示冲突标记和勾选框 ✅ 2026-03-01
+
+**测试任务**:
+- [x] **V6-T1** 单元测试：操作类型列识别逻辑 ✅ 2026-03-01
+- [x] **V6-T2** 单元测试：批量保存 API（新增、覆盖、跳过场景） ✅ 2026-03-01
+- [x] **V6-T3** 单元测试：无操作类型列的 Sheet 跳过处理 ✅ 2026-03-01
+
 ### 3. 质量保障 (Owner: Tester)
 - [x] **单元测试**：Parser 30/30 通过，Renderer 22/22 全部通过 ✅ 2026-02-18
 - [x] **边界测试**：空文件、缺失字段、非法字符处理已覆盖 ✅ 2026-02-18
@@ -323,6 +348,11 @@ fastmcp>=0.1.0
 - **2026-03-01 [Architect]** 技术方案设计完成：产出 `docs/TECH_DESIGN_BATCH_SAVE_V5.md`，定义全量覆盖模式实现方案 | 包含 4 项后端任务、5 项测试任务 | 产出物：TECH_DESIGN_BATCH_SAVE_V5.md | 待 Developer 实现
 - **2026-03-01 [Developer]** V5 后端任务完成：重构 batch_save_sheets 全量覆盖模式、新增 _sync_core_fields_full 方法、API 返回值扩展 | 4 项后端任务全部完成 | 139 passed, 3 skipped | 产出物：config_service.py、config.py
 - **2026-03-01 [Tester]** V5 测试完成：5 项测试任务全部通过 | 新增 test_batch_save_v5.py | 验收通过
+- **2026-03-01 [PM]** 需求细化：Excel 导入自动识别操作类型,问题背景：导入 Excel 后自动识别每个 Sheet 的操作类型列并保存 | 新增 PRD 3.4.3-C 节「操作类型自动识别」 | 待 Architect 技术方案设计
+- **2026-03-01 [Architect]** 技术方案设计完成:产出 `docs/TECH_DESIGN_ACTION_TYPE_RECOGNITION_V6.md`,定义操作类型自动识别方案 | 包含 4 项后端任务、3 项测试任务 | 产出物:TECH_DESIGN_ACTION_TYPE_RECOGNITION_V6.md | 待 Developer 实现
+- **2026-03-01 [Developer]** V6 后端开发完成：修改预览 API 返回操作类型、新增 batch_save_action_types 方法、新增批量保存 API | 4 项后端任务完成 | 产出物:upload.py、config_service.py、config.py | 待前端实现
+- **2026-03-01 [Developer]** V6 前端开发完成：预览界面展示操作类型列表、冲突交互 | 2 项前端任务完成 | 产出物:columns.html | 待测试验证
+- **2026-03-01 [Tester]** V6 测试完成：4 项测试任务全部通过 | 新增 test_action_type_recognition_v6.py | 验收通过
 
 ---
 
