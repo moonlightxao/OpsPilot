@@ -362,14 +362,21 @@
     function renderBatchSavePreview(data) {
         const container = document.getElementById('sheets-preview-list');
         const existingChapters = data.current_priority_rules || [];
-        
+        const recognizedActionTypes = data.recognized_action_types || {};
+        const existingActionTypes = data.existing_action_types || {};
+
+        // 存储操作类型数据供保存时使用
+        batchSaveData.recognizedActionTypes = recognizedActionTypes;
+        batchSaveData.existingActionTypes = existingActionTypes;
+
         container.innerHTML = data.sheets.map(sheet => {
             const isFirst = sheet.is_first_sheet;
             const exists = existingChapters.includes(sheet.name);
-            
+            const sheetActions = recognizedActionTypes[sheet.name];
+
             let statusBadge = '';
             let statusText = '';
-            
+
             if (isFirst) {
                 statusBadge = '<span class="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded">第一个 Sheet</span>';
                 statusText = '仅更新列映射';
@@ -381,7 +388,34 @@
                 statusBadge = '<span class="px-2 py-1 text-xs bg-green-100 text-green-600 rounded">新增</span>';
                 statusText = `将新增到章节排序（优先级: ${nextPriority}）`;
             }
-            
+
+            // 操作类型识别结果 HTML
+            let actionTypesHtml = '';
+            if (sheetActions && sheetActions.action_types && sheetActions.action_types.length > 0) {
+                const chapterExisting = existingActionTypes[sheet.name] || [];
+                const actionItems = sheetActions.action_types.map(action => {
+                    const isExisting = chapterExisting.includes(action);
+                    const conflictBadge = isExisting ?
+                        '<span class="ml-2 px-1.5 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded">⚠️ 已存在</span>' :
+                        '<span class="ml-2 px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">新建</span>';
+                    const checkbox = isExisting ?
+                        `<input type="checkbox" class="action-overwrite" data-chapter="${sheet.name}" data-action="${action}" title="覆盖">` :
+                        '';
+                    return `<span class="inline-flex items-center mr-2 mb-1 px-2 py-1 bg-gray-100 rounded text-sm">
+                        ${checkbox}
+                        ${action}
+                        ${conflictBadge}
+                    </span>`;
+                }).join('');
+
+                actionTypesHtml = `
+                    <div class="mt-3 pt-3 border-t">
+                        <p class="text-sm font-medium text-gray-700 mb-2">识别到的操作类型（来源列: ${sheetActions.column_name}）</p>
+                        <div class="flex flex-wrap">${actionItems}</div>
+                        ${chapterExisting.length > 0 ? '<p class="text-xs text-gray-500 mt-2">⚠️ 标记的项已存在，勾选复选框可覆盖</p>' : ''}
+                    </div>`;
+            }
+
             return `
                 <div class="border rounded-lg p-4 ${isFirst ? 'bg-gray-50' : ''}">
                     <div class="flex items-start justify-between mb-2">
@@ -396,6 +430,7 @@
                         ${sheet.columns.slice(0, 6).map(col => `<span class="tag text-xs">${col}</span>`).join('')}
                         ${sheet.columns.length > 6 ? `<span class="text-xs text-gray-400">+${sheet.columns.length - 6} 更多</span>` : ''}
                     </div>
+                    ${actionTypesHtml}
                 </div>
             `;
         }).join('');
@@ -412,13 +447,28 @@
         btn.textContent = '保存中...';
 
         try {
+            // 1. 保存列映射和章节排序
             const res = await apiRequest('/api/config/batch-save', 'POST', {
                 sheets: batchSaveData.sheets
             });
 
             if (res.success) {
-                // 批量保存成功后自动同步核心字段
+                // 2. 自动同步核心字段
                 const syncRes = await apiRequest('/api/config/sync-core-fields', 'POST');
+
+                // 3. 保存操作类型（如果有识别到的）
+                let actionTypeMessage = '';
+                if (batchSaveData.recognizedActionTypes && Object.keys(batchSaveData.recognizedActionTypes).length > 0) {
+                    const actionTypesPayload = buildActionTypesPayload();
+                    if (Object.keys(actionTypesPayload).length > 0) {
+                        const actionRes = await apiRequest('/api/config/batch-save-action-types', 'POST', {
+                            action_types: actionTypesPayload
+                        });
+                        if (actionRes.success) {
+                            actionTypeMessage = actionRes.message || '';
+                        }
+                    }
+                }
 
                 const updated = res.updated || {};
                 const mappingCount = (updated.sheet_column_mapping || []).length;
@@ -431,6 +481,9 @@
                 }
                 if (syncCount > 0) {
                     message += `，同步 ${syncCount} 个核心字段`;
+                }
+                if (actionTypeMessage) {
+                    message += `，${actionTypeMessage}`;
                 }
 
                 showToast(message, 'success');
@@ -445,5 +498,34 @@
             btn.disabled = false;
             btn.textContent = '保存到配置';
         }
+    }
+
+    function buildActionTypesPayload() {
+        const payload = {};
+        const recognizedTypes = batchSaveData.recognizedActionTypes || {};
+        const existingTypes = batchSaveData.existingActionTypes || {};
+
+        for (const [chapter, data] of Object.entries(recognizedTypes)) {
+            const chapterExisting = existingTypes[chapter] || [];
+            const actions = {};
+
+            for (const actionName of data.action_types) {
+                const isExisting = chapterExisting.includes(actionName);
+                // 检查用户是否勾选了覆盖
+                const checkbox = document.querySelector(`.action-overwrite[data-chapter="${chapter}"][data-action="${actionName}"]`);
+                const overwrite = checkbox ? checkbox.checked : false;
+
+                // 新操作类型直接保存，已存在的需要用户勾选覆盖
+                if (!isExisting || overwrite) {
+                    actions[actionName] = { overwrite: overwrite };
+                }
+            }
+
+            if (Object.keys(actions).length > 0) {
+                payload[chapter] = actions;
+            }
+        }
+
+        return payload;
     }
 </script>
