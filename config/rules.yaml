@@ -1,6 +1,6 @@
 # ============================================================
 # OpsPilot 规则配置文件
-# 最后更新: 2026-03-01 17:41:42
+# 最后更新: 2026-03-01 17:45:31
 # ============================================================
 
 priority_rules:
@@ -92,30 +92,6 @@ action_library:
       is_high_risk: false
       render_table: true
 sheet_column_mapping:
-  变更安排:
-    columns:
-    - 任务序号
-    - 任务
-    - 是否完成
-    - 实施人
-    - 复核人
-    - '46315'
-    - '46316'
-    column_mapping:
-      任务序号:
-      - 任务序号
-      任务:
-      - 任务
-      是否完成:
-      - 是否完成
-      实施人:
-      - 实施人
-      复核人:
-      - 复核人
-      '46315':
-      - '46315'
-      '46316':
-      - '46316'
   应用配置:
     columns:
     - 操作类型
@@ -194,49 +170,34 @@ sheet_column_mapping:
       - 实施人
       复核人:
       - 复核人
-  上线代码包清单:
-    columns:
-    - 操作类型
-    - 包名
-    - 包类型
-    - 部署资源名
-    column_mapping:
-      操作类型:
-      - 操作类型
-      包名:
-      - 包名
-      包类型:
-      - 包类型
-      部署资源名:
-      - 部署资源名
 core_fields:
-  executor:
-    aliases:
-    - 复核人
-    - 实施人
-    required: false
-  action_type:
-    aliases:
-    - 操作类型
-    - 操作
-    required: false
-  task_name:
-    aliases:
-    - 任务名称
-    - 任务名
-    - 任务
-    required: false
   deploy_unit:
     aliases:
     - 应用名称
     - 部署单元
     required: false
+  task_name:
+    aliases:
+    - 任务
+    - 任务序号
+    - 任务名称
+    required: false
   external_link:
     aliases: []
     required: false
-  包类型:
+  action_type:
     aliases:
-    - 包类型
+    - 操作
+    - 操作类型
+    required: false
+  executor:
+    aliases:
+    - 复核人
+    - 实施人
+    required: false
+  包名:
+    aliases:
+    - 包名
     required: false
     custom: true
   值:
@@ -244,39 +205,9 @@ core_fields:
     - 值
     required: false
     custom: true
-  任务:
+  包类型:
     aliases:
-    - 任务
-    required: false
-    custom: true
-  包名:
-    aliases:
-    - 包名
-    required: false
-    custom: true
-  参数:
-    aliases:
-    - 参数
-    required: false
-    custom: true
-  是否完成:
-    aliases:
-    - 是否完成
-    required: false
-    custom: true
-  TOPIC名称:
-    aliases:
-    - TOPIC名称
-    required: false
-    custom: true
-  '46315':
-    aliases:
-    - '46315'
-    required: false
-    custom: true
-  键:
-    aliases:
-    - 键
+    - 包类型
     required: false
     custom: true
   部署资源名:
@@ -289,8 +220,28 @@ core_fields:
     - '46316'
     required: false
     custom: true
-  任务序号:
+  TOPIC名称:
     aliases:
-    - 任务序号
+    - TOPIC名称
+    required: false
+    custom: true
+  是否完成:
+    aliases:
+    - 是否完成
+    required: false
+    custom: true
+  参数:
+    aliases:
+    - 参数
+    required: false
+    custom: true
+  '46315':
+    aliases:
+    - '46315'
+    required: false
+    custom: true
+  键:
+    aliases:
+    - 键
     required: false
     custom: true
