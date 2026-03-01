@@ -764,3 +764,75 @@ class ConfigService:
                 "required": True
             }
         }
+
+    # ========== 操作类型自动识别相关（V6 新增） ==========
+
+    def batch_save_action_types(self, action_types: dict) -> dict:
+        """
+        批量保存操作类型（V6 新增）
+
+        将从 Excel 识别到的操作类型保存到 action_library
+
+        Args:
+            action_types: {
+                "Sheet名": {
+                    "操作类型名": {"overwrite": true/false},
+                    ...
+                },
+                ...
+            }
+
+        Returns:
+            {
+                "added": {"Sheet名": ["新增的操作类型"]},
+                "updated": {"Sheet名": ["覆盖的操作类型"]},
+                "skipped": {"Sheet名": ["跳过的操作类型"]}
+            }
+        """
+        config = self.load()
+        action_library = config.get("action_library", {})
+
+        result = {
+            "added": {},
+            "updated": {},
+            "skipped": {}
+        }
+
+        for chapter, actions in action_types.items():
+            if chapter not in action_library:
+                action_library[chapter] = {}
+
+            for action_name, options in actions.items():
+                overwrite = options.get("overwrite", False)
+                is_existing = action_name in action_library[chapter]
+
+                if is_existing and not overwrite:
+                    # 跳过已存在且不覆盖的
+                    if chapter not in result["skipped"]:
+                        result["skipped"][chapter] = []
+                    result["skipped"][chapter].append(action_name)
+                else:
+                    # 新增或覆盖
+                    action_library[chapter][action_name] = {
+                        "instruction": action_name,
+                        "is_high_risk": False,
+                        "render_table": True
+                    }
+
+                    if is_existing:
+                        if chapter not in result["updated"]:
+                            result["updated"][chapter] = []
+                        result["updated"][chapter].append(action_name)
+                    else:
+                        if chapter not in result["added"]:
+                            result["added"][chapter] = []
+                        result["added"][chapter].append(action_name)
+
+        config["action_library"] = action_library
+        self.save(config)
+
+        return result
+
+    def get_action_library(self) -> Dict[str, Dict[str, Any]]:
+        """获取操作类型配置"""
+        return self.get("action_library", {})

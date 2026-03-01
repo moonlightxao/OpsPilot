@@ -463,3 +463,69 @@ def sync_core_fields():
             "success": False,
             "error": str(e)
         }), 500
+
+
+# ========== 批量保存操作类型（V6 新增） ==========
+
+@config_bp.route('/batch-save-action-types', methods=['POST'])
+def batch_save_action_types():
+    """
+    批量保存操作类型（V6 新增）
+
+    接收用户确认的操作类型列表，保存到 action_library
+
+    请求体:
+    {
+        "action_types": {
+            "Sheet名": {
+                "操作类型名": {"overwrite": true/false}
+            }
+        }
+    }
+
+    返回:
+    {
+        "success": true,
+        "message": "已保存 N 个操作类型",
+        "result": {
+            "added": {"Sheet名": ["新增1", "新增2"]},
+            "updated": {"Sheet名": ["覆盖1"]},
+            "skipped": {"Sheet名": ["跳过1"]}
+        }
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "请求数据不能为空"}), 400
+
+        action_types = data.get('action_types', {})
+        if not isinstance(action_types, dict):
+            return jsonify({"success": False, "error": "action_types 格式错误"}), 400
+
+        if not action_types:
+            return jsonify({"success": False, "error": "action_types 不能为空"}), 400
+
+        from ..services import BackupService
+        BackupService().create_backup()
+
+        result = config_service.batch_save_action_types(action_types)
+
+        # 构建响应消息
+        total_count = (
+            sum(len(v) for v in result.get("added", {}).values()) +
+            sum(len(v) for v in result.get("updated", {}).values())
+        )
+        skipped_count = sum(len(v) for v in result.get("skipped", {}).values())
+
+        message_parts = [f"已保存 {total_count} 个操作类型"]
+        if skipped_count > 0:
+            message_parts.append(f"跳过 {skipped_count} 个已存在的操作类型")
+
+        return jsonify({
+            "success": True,
+            "message": "，".join(message_parts),
+            "result": result
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500

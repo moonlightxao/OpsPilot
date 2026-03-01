@@ -158,16 +158,23 @@ def upload_excel():
 @upload_bp.route('/excel/preview', methods=['POST'])
 def upload_excel_preview():
     """
-    Excel 一键保存预览接口
+    Excel 一键保存预览接口（V6 增强）
 
     上传 Excel 文件，返回所有 Sheet 及列名预览，用于"一键保存"功能
+    V6 新增：自动识别每个 Sheet 的操作类型列，返回识别到的操作类型列表
 
     Returns:
         JSON: {
             "success": true,
             "sheets": [{"name": "Sheet1", "columns": [...], "is_first_sheet": true}],
             "current_priority_rules": ["Sheet2", "Sheet3"],
-            "max_priority": 20
+            "max_priority": 20,
+            "recognized_action_types": {
+                "Sheet1": {"column_name": "操作类型", "action_types": ["新增", "删除"]}
+            },
+            "existing_action_types": {
+                "Sheet1": ["新增"]
+            }
         }
     """
     if 'file' not in request.files:
@@ -207,23 +214,54 @@ def upload_excel_preview():
             file.save(tmp.name)
             tmp_path = tmp.name
 
-        # 读取所有 Sheet
+        # 获取配置
+        config_service = ConfigService()
+        core_fields = config_service.load().get("core_fields", {})
+        action_type_aliases = core_fields.get("action_type", {}).get("aliases", ["操作类型", "操作", "action"])
+
+        # 获取已存在的操作类型
+        action_library = config_service.get_action_library()
+        existing_action_types = {}
+        for chapter, actions in action_library.items():
+            existing_action_types[chapter] = list(actions.keys()) if actions else []
+
+        # 读取所有 Sheet 并识别操作类型
         sheets = []
+        recognized_action_types = {}
+
         with pd.ExcelFile(tmp_path) as xl:
             sheet_names = xl.sheet_names
             for idx, sheet_name in enumerate(sheet_names):
-                df = pd.read_excel(xl, sheet_name=sheet_name, nrows=0)
-                columns = df.columns.tolist()
+                # 读取表头
+                df_header = pd.read_excel(xl, sheet_name=sheet_name, nrows=0)
+                columns = df_header.columns.tolist()
                 # 过滤掉 Unnamed 列
                 columns = [col for col in columns if not str(col).startswith('Unnamed')]
+
                 sheets.append({
                     "name": sheet_name,
                     "columns": columns,
                     "is_first_sheet": (idx == 0)
                 })
 
+                # 识别操作类型列
+                action_type_column = _find_action_type_column(columns, action_type_aliases)
+
+                if action_type_column:
+                    # 读取数据行（最多1000行用于识别）
+                    df_data = pd.read_excel(xl, sheet_name=sheet_name, usecols=[action_type_column])
+                    # 提取去重的操作类型值
+                    action_values = df_data[action_type_column].dropna().astype(str).str.strip().unique().tolist()
+                    # 过滤空字符串
+                    action_values = [v for v in action_values if v]
+
+                    if action_values:
+                        recognized_action_types[sheet_name] = {
+                            "column_name": action_type_column,
+                            "action_types": action_values
+                        }
+
         # 获取当前配置信息
-        config_service = ConfigService()
         priority_rules = config_service.get_priority_rules()
 
         # 获取已存在的章节名称列表
@@ -239,7 +277,9 @@ def upload_excel_preview():
             "success": True,
             "sheets": sheets,
             "current_priority_rules": current_priority_rules,
-            "max_priority": max_priority
+            "max_priority": max_priority,
+            "recognized_action_types": recognized_action_types,
+            "existing_action_types": existing_action_types
         })
 
     except Exception as e:
@@ -250,3 +290,22 @@ def upload_excel_preview():
                 os.unlink(tmp_path)
             except:
                 pass
+
+
+def _find_action_type_column(columns: list, aliases: list) -> str:
+    """
+    在列名列表中查找操作类型列
+
+    Args:
+        columns: 列名列表
+        aliases: 操作类型列的别名列表
+
+    Returns:
+        匹配的列名，无匹配返回 None
+    """
+    for col in columns:
+        col_str = str(col).lower().strip()
+        for alias in aliases:
+            if alias.lower() in col_str:
+                return str(col)
+    return None
