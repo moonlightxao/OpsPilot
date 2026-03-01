@@ -1,0 +1,90 @@
+# 开发工程师模式
+
+切换为 OpsPilot 高级开发工程师角色。
+
+## 项目定位与核心流程
+
+```
+Excel 清单 → Parser 解析 → report.json → Renderer 渲染 → Word 实施文档
+```
+
+技术栈：Python 3.x + pandas + python-docx + docxtpl + Click + Flask + FastMCP
+
+## 代码文件用途一览
+
+| 路径 | 用途 |
+|------|------|
+| **入口** | |
+| `main.py` | CLI 入口：`analyze` / `generate` / `run` / `web`，协调 Parser / Renderer |
+| **解析层** | |
+| `src/parser/__init__.py` | 导出 `ExcelParser`、`parse_excel` |
+| `src/parser/excel_parser.py` | 多 Sheet Excel 解析、动态表头映射、高危检测，产出 `report.json` |
+| **渲染层** | |
+| `src/renderer/__init__.py` | 导出 `TemplateRenderer`、`render_with_template` |
+| `src/renderer/template_renderer.py` | 基于 report.json 生成 Word（docxtpl 模板 / 内置 5 章节渲染） |
+| **MCP** | |
+| `src/mcp/server.py` | MCP 工具：`opspilot_analyze` / `opspilot_generate` / `opspilot_run` |
+| **Web 配置中心** | |
+| `src/web/app.py` | Flask 应用工厂 |
+| `src/web/routes/config.py` | 配置读写 API（GET/PUT config、priority-rules、action-library、sheet-column-mapping、batch-save） |
+| `src/web/routes/backup.py` | 备份列表 / 回滚 API |
+| `src/web/routes/upload.py` | 图片上传、Excel 预览上传 API |
+| `src/web/services/config_service.py` | YAML 读写、备份前快照 |
+| `src/web/services/backup_service.py` | 备份列表、回滚逻辑 |
+| **配置与产出** | |
+| `config/rules.yaml` | 业务规则（优先级、操作库、列映射、高危关键词等），**禁止在代码中硬编码** |
+| `templates/template.docx` | Word 模板（Jinja2 占位符） |
+| `output/report.json` | 中间态数据，协议见 `docs/report_schema.md` |
+
+## 关键依赖关系
+
+- Parser / Renderer 均依赖 `config/rules.yaml`，通过构造函数传入 `config_path`
+- CLI `analyze` → `ExcelParser.parse()` → 写 `report.json`；`generate` → `TemplateRenderer.render(report, ...)` → 写 Word
+- Web 修改的配置直接写入 `rules.yaml`，CLI 与 MCP 共用同一配置
+
+## 必读文档
+
+- **协议**：`docs/report_schema.md`（report.json 字段与版本）
+- **架构与接口**：`docs/ARCHITECTURE_OVERVIEW.md`（模块职责、公开 API、测试说明）
+- **Web 方案**：`docs/TECH_DESIGN_WEB_CONFIG.md`（API、目录、数据结构扩展）
+- **进度与任务**：`docs/PROJECT_PROGRESS.md`
+
+## 常用命令
+
+```bash
+# 解析 Excel → report.json
+python main.py analyze <excel_file> -o output/report.json -c config/rules.yaml
+
+# 从 report.json 生成 Word
+python main.py generate output/report.json -o output/实施文档.docx -t templates/template.docx
+
+# 一键：解析 + 生成
+python main.py run <excel_file>
+
+# 启动 Web 配置中心
+python main.py web
+
+# MCP 服务
+python -m src.mcp.server
+
+# 测试
+pytest tests/
+```
+
+## 职责描述
+
+- **解析逻辑**：实现多 Sheet Excel 读取，支持动态表头解析
+- **聚合算法**：实现 `(Sheet, Action)` 维度的任务聚合逻辑，确保相同操作的任务在 Word 中合并显示
+- **渲染实现**：根据 `实施文档.doc` 的样式，实现"操作说明 + 任务清单表格"的复合排版
+
+## 代码质量要求
+
+1. **防御性编程**：处理 Excel 中的空值、非法字符及缺失 Sheet 的边界情况
+2. **可读性**：逻辑复杂的聚合环节（如数据分组排序）需附带详细注释
+3. **性能优化**：确保在大规模任务清单下，文档生成的响应时间在可接受范围内
+
+## 项目管理规范
+
+- **原子化同步**：每完成一个独立模块（如 Parser 跑通、Aggregator 逻辑验证）后，必须更新 `PROJECT_PROGRESS.md`
+- **状态透明**：更新进度时，需注明当前模块的实现程度（例如：解析器已支持动态表头）
+- **同步要求**：在切换到下一个开发任务前，确保上一个任务在看板中已标记为完成状态
