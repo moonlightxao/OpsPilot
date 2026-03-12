@@ -16,8 +16,8 @@ upload_bp = Blueprint('upload', __name__, url_prefix='/api/upload')
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 # 图片大小限制（5MB）
 MAX_IMAGE_SIZE = 5 * 1024 * 1024
-# Excel 上传限制（10MB）
-MAX_EXCEL_SIZE = 10 * 1024 * 1024
+# Excel 上传限制（50MB）
+MAX_EXCEL_SIZE = 50 * 1024 * 1024
 
 
 def allowed_file(filename: str, allowed_extensions: set) -> bool:
@@ -110,7 +110,7 @@ def upload_excel():
     if file_size > MAX_EXCEL_SIZE:
         return jsonify({
             "success": False,
-            "error": f"文件大小超过限制（最大 10MB）"
+            "error": f"文件大小超过限制（最大 50MB）"
         }), 400
 
     tmp_path = None
@@ -200,7 +200,7 @@ def upload_excel_preview():
     if file_size > MAX_EXCEL_SIZE:
         return jsonify({
             "success": False,
-            "error": "文件大小超过限制（最大 10MB）"
+            "error": "文件大小超过限制（最大 50MB）"
         }), 400
 
     tmp_path = None
