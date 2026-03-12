@@ -8,7 +8,9 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(PYTHONIOENCODING=utf-8 python:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(chcp:*)",
+      "Bash(git pull:*)"
     ]
   }
 }
