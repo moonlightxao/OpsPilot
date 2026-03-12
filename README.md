@@ -126,7 +126,20 @@ OpsPilot/
 ├── src/
 │   ├── parser/                 # 解析模块
 │   │   ├── __init__.py
-│   │   └── excel_parser.py
+│   │   ├── excel_parser.py
+│   │   ├── risk_keywords.py    # 内置风险关键词库
+│   │   ├── risk_detector.py    # 智能风险检测器
+│   │   ├── llm_risk_analyzer.py # LLM 风险分析器
+│   │   └── prompts/             # 提示词模板
+│   │       ├── __init__.py
+│   │       └── risk_assessment.py
+│   ├── llm/                    # LLM 模块（实验性）
+│   │   ├── __init__.py
+│   │   ├── base.py             # 抽象基类
+│   │   ├── factory.py          # 工厂函数
+│   │   ├── openai_client.py
+│   │   ├── anthropic_client.py
+│   │   └── ollama_client.py
 │   ├── renderer/               # 渲染模块
 │   │   ├── __init__.py
 │   │   └── template_renderer.py
@@ -241,6 +254,66 @@ http://127.0.0.1:5000
 | `sheet_column_mapping` | 定义不同 Sheet 类型在 Word 表格中的列展示 |
 | `core_fields` | 定义核心字段的别名映射（用于解析器识别） |
 
+## 实验性功能
+
+> ⚠️ 以下功能为实验性功能，需要切换到 `feature/llm-risk-detection` 分支体验
+
+### LLM 增强的智能风险识别
+
+基于大语言模型的智能风险识别系统，结合内置词库快速筛选与 LLM 深度分析。
+
+**切换分支体验**：
+```bash
+git fetch origin feature/llm-risk-detection
+git checkout feature/llm-risk-detection
+pip install -r requirements.txt
+```
+
+**功能特性**：
+- **内置词库快速筛选**：支持中英文高危/中危/低危关键词，零成本
+- **组合风险模式**：如 "批量+删除" 自动升级为高危
+- **安全关键词白名单**：如 "备份"、"检查" 自动标记为安全
+- **LLM 深度分析**：支持 OpenAI、Anthropic、Ollama 三种后端
+- **配置驱动**：所有规则从 `config/rules.yaml` 读取
+
+**环境变量配置**：
+```bash
+# OpenAI
+OPENAI_API_KEY=sk-xxx
+OPENAI_BASE_URL=https://api.openai.com/v1
+
+# Anthropic
+ANTHROPIC_API_KEY=sk-xxx
+
+# Ollama（本地部署）
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+**使用示例**：
+```bash
+# 仅使用内置词库进行风险评估
+python main.py analyze tests/fixtures/sample.xlsx --risk-assess
+
+# 启用 LLM 深度分析（需配置 API 密钥）
+python main.py analyze tests/fixtures/sample.xlsx --risk-assess --use-llm
+```
+
+**配置示例** (`config/rules.yaml`)：
+```yaml
+risk_detection:
+  enabled: true
+  builtin:
+    enabled: true
+    custom_high_keywords: ["危险操作"]
+    safe_keywords: ["备份", "检查"]
+  llm:
+    enabled: false
+    provider: "ollama"
+    model: "qwen2.5:7b"
+```
+
+---
+
 ## 开发指南
 
 ### 环境准备
@@ -287,19 +360,38 @@ Excel → Parser → report.json v2.1 (人工确认) → docxtpl → template.do
 | M7 | 操作类型章节绑定 + 批量删除 + 核心字段同步 | ✅ 完成 |
 | V5 | Excel 一键保存全量覆盖模式，解决配置累积问题 | ✅ 完成 |
 | V6 | Excel 导入自动识别操作类型，支持冲突确认 | ✅ 完成 |
+| V7 | LLM 增强的智能风险识别（实验性） | 🧪 实验中 |
 
 ## 依赖
 
 ```txt
+# Excel 解析
 openpyxl>=3.1.0
 pandas>=2.0.0
+
+# Word 文档生成
 python-docx>=1.0.0
 docxtpl>=0.17.0
-click>=8.1.0
+
+# YAML 配置解析
 pyyaml>=6.0
+
+# 命令行参数
+click>=8.1.0
+
+# MCP 服务化
 fastmcp>=0.1.0
+
+# Web 服务
 flask>=3.0.0
 werkzeug>=3.0.0
+
+# LLM 客户端（实验性功能）
+requests>=2.28.0
+openai>=1.0.0
+anthropic>=0.18.0
+
+# 测试框架
 pytest>=7.0.0
 pytest-cov>=4.0.0
 ```
