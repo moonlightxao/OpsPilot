@@ -32,6 +32,10 @@
     {
       "sheet_name": "string - 所属 Sheet 名",
       "action_type": "string - 触发的高危操作类型",
+      "risk_level": "string - 风险等级：high/medium/low/safe",
+      "risk_score": "integer - 风险分数 (0-100)",
+      "source": "string - 评估来源：builtin/llm",
+      "risk_reasons": ["array - 风险原因列表"],
       "task_count": "integer - 涉及任务数",
       "task_names": ["string - 涉及的任务名列表"]
     }
@@ -127,6 +131,17 @@
     {
       "sheet_name": "应用配置",
       "action_type": "删除",
+      "risk_level": "high",
+      "risk_score": 80,
+      "source": "builtin",
+      "risk_reasons": [
+        {
+          "type": "keyword_match",
+          "keyword": "删除",
+          "category": "destructive",
+          "level": "high"
+        }
+      ],
       "task_count": 1,
       "task_names": ["废弃配置清理"]
     }
@@ -219,3 +234,43 @@
 | `sections[].has_action_groups` | Y | 用于模板条件判断 |
 | `action_groups[].task_count` | Y | 任务数量，便于统计显示 |
 | `tasks[].cells` | Y | 按列顺序排列的单元格值数组 |
+
+### risk_alerts 结构
+
+风险警报数组，每个元素包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| sheet_name | string | 所属模块/Sheet 名称 |
+| action_type | string | 操作类型 |
+| risk_level | string | 风险等级：high/medium/low/safe |
+| risk_score | int | 风险分数 (0-100) |
+| source | string | 评估来源：builtin/llm |
+| risk_reasons | array | 风险原因列表 |
+| task_count | int | 涉及任务数量 |
+| task_names | array | 任务名称列表 |
+
+### risk_reasons 结构
+
+每个风险原因包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| type | string | 原因类型：keyword_match/compound_match/safe_keyword/llm_error |
+| keyword/keywords | string/array | 匹配的关键词 |
+| category | string | 分类：destructive/impactful/routine/compound_risk/whitelist |
+| level | string | 风险级别 |
+
+### risk_summary 结构
+
+```json
+{
+  "risk_summary": {
+    "high_count": 2,
+    "medium_count": 3,
+    "low_count": 5,
+    "safe_count": 1,
+    "llm_analyzed": false
+  }
+}
+```

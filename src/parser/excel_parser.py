@@ -778,14 +778,64 @@ class ExcelParser:
     def get_columns_for_sheet(self, sheet_name: str) -> list[str]:
         """
         获取指定 Sheet 应展示的列名（公开接口）
-        
+
         Args:
             sheet_name: Sheet 名称
-            
+
         Returns:
             列名列表
         """
         return self._get_columns_for_sheet(sheet_name)
+
+    def assess_risks(self, report: dict, use_llm: bool = False) -> dict:
+        """
+        对解析结果进行风险评估
+
+        Args:
+            report: 解析后的 report 数据
+            use_llm: 是否使用 LLM 分析
+
+        Returns:
+            更新后的 report，包含 risk_alerts
+        """
+        from .risk_detector import RiskDetector
+
+        detector = RiskDetector(self._config)
+        risk_alerts = []
+
+        for section in report.get("sections", []):
+            for action_group in section.get("action_groups", []):
+                tasks = action_group.get("tasks", [])
+                sample_cells = tasks[0].get("cells", []) if tasks else []
+
+                assessment = detector.assess(
+                    action_type=action_group.get("action_type", ""),
+                    instruction=action_group.get("instruction", ""),
+                    cells=sample_cells,
+                    use_llm=use_llm
+                )
+
+                if assessment.risk_level in ["high", "medium"]:
+                    risk_alerts.append({
+                        "sheet_name": section.get("section_name"),
+                        "action_type": action_group.get("action_type"),
+                        "risk_level": assessment.risk_level,
+                        "risk_score": assessment.risk_score,
+                        "source": assessment.source,
+                        "risk_reasons": assessment.risk_reasons,
+                        "task_count": len(tasks),
+                        "task_names": [t.get("cells", [None])[0] for t in tasks[:5] if t.get("cells")]
+                    })
+
+        # 添加风险摘要
+        report["risk_alerts"] = risk_alerts
+        report["risk_summary"] = {
+            "high_count": sum(1 for a in risk_alerts if a["risk_level"] == "high"),
+            "medium_count": sum(1 for a in risk_alerts if a["risk_level"] == "medium"),
+            "llm_analyzed": use_llm
+        }
+
+        return report
 
 
 # 便捷函数

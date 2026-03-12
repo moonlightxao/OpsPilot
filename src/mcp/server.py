@@ -133,35 +133,117 @@ def opspilot_run(
 ) -> str:
     """
     完整流程：解析 Excel 并生成 Word 文档
-    
+
     Args:
         excel_path: Excel 文件路径
         config_path: 规则配置文件路径
         template_path: Word 模板文件路径
         output_path: 输出文件路径
         force: 是否跳过高危操作确认（当前未实现确认流程）
-    
+
     Returns:
         生成的 Word 文件绝对路径
-        
+
     Raises:
         FileNotFoundError: 文件不存在
         ValueError: 处理过程中出现错误
     """
     # 1. 解析 Excel
     report = opspilot_analyze(excel_path, config_path)
-    
+
     # 2. 检查高危操作（如果 force=False 且存在高危操作）
     if not force and report.get('has_risk_alerts', False):
         risk_count = report.get('summary', {}).get('high_risk_count', 0)
         # 注：MCP 协议下无法实现交互式确认，这里仅记录日志
         # 实际应用中应该返回错误或通过其他机制确认
         print(f"[警告] 检测到 {risk_count} 个高危操作，建议人工确认后使用 force=True 继续执行")
-    
+
     # 3. 生成 Word
     result_path = opspilot_generate(report, template_path, output_path, config_path)
-    
+
     return result_path
+
+
+@mcp.tool()
+def opspilot_assess_risk(
+    excel_path: str,
+    config_path: str = "config/rules.yaml",
+    use_llm: bool = False
+) -> dict:
+    """
+    智能风险评估
+
+    Args:
+        excel_path: Excel 文件路径
+        config_path: 规则配置文件路径
+        use_llm: 是否启用 LLM 深度分析（需要 API 密钥）
+
+    Returns:
+        风险评估报告，包含每个操作组的风险等级和原因
+    """
+    from src.parser.risk_detector import RiskDetector
+
+    # 1. 解析 Excel
+    report = opspilot_analyze(excel_path, config_path)
+
+    # 2. 初始化风险检测器
+    llm_client = None
+    if use_llm:
+        try:
+            from src.llm import create_llm_client
+            import yaml
+
+            config_file = Path(config_path)
+            if not config_file.is_absolute():
+                config_file = project_root / config_path
+
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+
+            llm_config = config.get("risk_detection", {}).get("llm", {})
+            if llm_config.get("enabled"):
+                llm_client = create_llm_client(llm_config)
+        except Exception as e:
+            pass  # LLM 不可用时使用内置词库
+
+    # 获取配置用于风险检测器
+    config_file = Path(config_path)
+    if not config_file.is_absolute():
+        config_file = project_root / config_path
+
+    parser = ExcelParser(str(config_file))
+    detector = RiskDetector(parser._config, llm_client)
+
+    # 3. 遍历所有操作组进行风险评估
+    assessments = []
+    for section in report.get("sections", []):
+        for action_group in section.get("action_groups", []):
+            # 获取第一个任务的单元格数据作为示例
+            tasks = action_group.get("tasks", [])
+            sample_cells = tasks[0].get("cells", []) if tasks else []
+
+            assessment = detector.assess(
+                action_type=action_group.get("action_type", ""),
+                instruction=action_group.get("instruction", ""),
+                cells=sample_cells,
+                use_llm=use_llm
+            )
+            assessments.append({
+                "sheet_name": section.get("section_name"),
+                "action_type": action_group.get("action_type"),
+                "risk_level": assessment.risk_level,
+                "risk_score": assessment.risk_score,
+                "risk_reasons": assessment.risk_reasons,
+                "source": assessment.source
+            })
+
+    return {
+        "source_file": report.get("meta", {}).get("source_file"),
+        "total_operations": len(assessments),
+        "high_risk_count": sum(1 for a in assessments if a["risk_level"] == "high"),
+        "medium_risk_count": sum(1 for a in assessments if a["risk_level"] == "medium"),
+        "assessments": assessments
+    }
 
 
 if __name__ == "__main__":

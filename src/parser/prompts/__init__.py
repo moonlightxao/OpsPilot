@@ -1,0 +1,5 @@
+"""提示词模块"""
+
+from .risk_assessment import RISK_ASSESSMENT_PROMPT, SCENARIO_ENHANCEMENTS
+
+__all__ = ["RISK_ASSESSMENT_PROMPT", "SCENARIO_ENHANCEMENTS"]
