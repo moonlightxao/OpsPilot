@@ -834,10 +834,6 @@ class ConfigService:
 
         return result
 
-    def get_action_library(self) -> Dict[str, Dict[str, Any]]:
-        """获取操作类型配置"""
-        return self.get("action_library", {})
-
     def _generate_default_instruction(self, action_name: str) -> str:
         """
         生成操作类型的默认步骤模板
