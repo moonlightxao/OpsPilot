@@ -3,9 +3,13 @@
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import json
+import re
+import logging
 
 from ..llm import BaseLLMClient
 from .prompts.risk_assessment import RISK_ASSESSMENT_PROMPT, SCENARIO_ENHANCEMENTS
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -94,16 +98,51 @@ class LLMRiskAnalyzer:
         return enhancements
 
     def _parse_response(self, content: str) -> Dict[str, Any]:
-        """解析 LLM 响应"""
-        try:
-            # 尝试提取 JSON 块
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-            else:
-                json_str = content.strip()
+        """解析 LLM 响应，支持多种 JSON 提取策略"""
+        json_str = None
 
+        # 策略 1: 提取 ```json 代码块
+        json_block_match = re.search(
+            r'```json\s*\n?(.*?)\n?```',
+            content,
+            re.DOTALL | re.IGNORECASE
+        )
+        if json_block_match:
+            json_str = json_block_match.group(1).strip()
+            logger.debug("使用 ```json 代码块提取策略")
+
+        # 策略 2: 提取任意 ``` 代码块
+        if not json_str:
+            code_block_match = re.search(
+                r'```\s*\n?(.*?)\n?```',
+                content,
+                re.DOTALL
+            )
+            if code_block_match:
+                block_content = code_block_match.group(1).strip()
+                # 检查是否像 JSON
+                if block_content.startswith('{') and block_content.endswith('}'):
+                    json_str = block_content
+                    logger.debug("使用通用代码块提取策略")
+
+        # 策略 3: 使用正则提取最外层 JSON 对象
+        if not json_str:
+            json_object_match = re.search(
+                r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',
+                content,
+                re.DOTALL
+            )
+            if json_object_match:
+                json_str = json_object_match.group(0).strip()
+                logger.debug("使用正则 JSON 对象提取策略")
+
+        # 策略 4: 直接使用原始内容
+        if not json_str:
+            json_str = content.strip()
+            logger.debug("使用原始内容策略")
+
+        # 尝试解析 JSON
+        try:
             result = json.loads(json_str)
 
             # 确保必要字段存在
@@ -114,7 +153,16 @@ class LLMRiskAnalyzer:
                 "suggestions": result.get("suggestions", []),
                 "raw_response": content
             }
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON 解析失败: {e}, 内容预览: {json_str[:100]}...")
+            return {
+                "risk_level": "unknown",
+                "risk_score": 0,
+                "risk_reasons": [{"reason": f"JSON 解析失败: {str(e)}", "severity": "error"}],
+                "raw_response": content
+            }
         except Exception as e:
+            logger.error(f"解析响应时发生未知错误: {e}")
             return {
                 "risk_level": "unknown",
                 "risk_score": 0,

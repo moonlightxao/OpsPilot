@@ -10,7 +10,7 @@ class AnthropicClient(BaseLLMClient):
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-6",
+        model: str = "claude-sonnet-4-6-20250514",
         api_key: Optional[str] = None,
         **kwargs
     ):
