@@ -1,6 +1,6 @@
 # ============================================================
 # OpsPilot 规则配置文件
-# 最后更新: 2026-03-01 17:45:31
+# 最后更新: 2026-03-13 10:25:27
 # ============================================================
 
 # 实施总表配置（第一个Sheet页）
@@ -63,7 +63,7 @@ action_library:
       is_high_risk: false
       render_table: true
     删除:
-      instruction: 删除
+      instruction: 删除测试
       is_high_risk: false
       render_table: true
     新增授权:
@@ -292,3 +292,4 @@ core_fields:
     - 键
     required: false
     custom: true
+high_risk_keywords: []
