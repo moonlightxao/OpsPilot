@@ -4,7 +4,7 @@
 - **当前阶段**: V6 里程碑验收完成
 - **完成度**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
 - **项目健康度**: 🟢 核心功能 + Web 配置中心增强版全部完成
-- **更新日期**: 2026-03-12
+- **更新日期**: 2026-03-13
 
 ---
 
@@ -106,6 +106,7 @@ fastmcp>=0.1.0
 | 🟡 | 缺陷分析 | QA_DEFECT_REPORT 缺陷根因：实现滞后 + rules 配置遗漏，非技术方案问题 | 已分析 | Architect |
 | 🟡 | 配置遗漏 | rules.yaml 缺少「序号」列 column_mapping，黄金样本「任务序号」无法映射 | 已补充 | Architect |
 | 🟡 | 功能缺失 | Excel一键保存时 core_fields 未与保留的列名同步，导致解析器仍尝试匹配已删除的列 | 技术方案完成 | Architect |
+| 🟢 | 方法重复 | ConfigService.get_action_library() 重复定义导致保存操作类型报错 | 已解决 | Developer |
 
 ---
 
@@ -353,6 +354,7 @@ fastmcp>=0.1.0
 - **2026-03-01 [Developer]** V6 后端开发完成：修改预览 API 返回操作类型、新增 batch_save_action_types 方法、新增批量保存 API | 4 项后端任务完成 | 产出物:upload.py、config_service.py、config.py | 待前端实现
 - **2026-03-01 [Developer]** V6 前端开发完成：预览界面展示操作类型列表、冲突交互 | 2 项前端任务完成 | 产出物:columns.html | 待测试验证
 - **2026-03-01 [Tester]** V6 测试完成：4 项测试任务全部通过 | 新增 test_action_type_recognition_v6.py | 验收通过
+- **2026-03-13 [Developer]** Bug 修复：删除 ConfigService.get_action_library() 重复定义 | 问题：编辑操作类型保存时报错 `unexpected keyword argument 'auto_migrate'` | 原因：V2/V6 两个同名方法定义，后者覆盖前者 | 修复：删除行 837-839 的 V6 版本，保留 V2 版本 | 产出物：config_service.py
 
 ---
 
