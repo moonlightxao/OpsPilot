@@ -2,6 +2,7 @@
 # 负责多 Sheet Excel 读取与动态表头解析
 
 from .excel_parser import ExcelParser, parse_excel
+from .excel_reader import ExcelReader
 from .risk_detector import RiskDetector, RiskAssessment
 from .risk_keywords import (
     BUILTIN_RISK_KEYWORDS,
@@ -13,6 +14,7 @@ from .llm_risk_analyzer import LLMRiskAnalyzer, OperationContext
 __all__ = [
     'ExcelParser',
     'parse_excel',
+    'ExcelReader',
     'RiskDetector',
     'RiskAssessment',
     'BUILTIN_RISK_KEYWORDS',
