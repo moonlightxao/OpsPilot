@@ -275,14 +275,11 @@ class ExcelParser:
         """
         解析实施总表（固定从「变更安排」Sheet 获取）
 
-        按 rules 中 implementation_summary 配置：
-        - 过滤 Unnamed、空列名
-        - 列映射到 output_columns
-        - 日期列做 Excel 序列号 → YYYY-MM-DD 转换
-        - 无序号列时自动生成 1,2,3...
+        处理合并单元格表头，提取固定5列：
+        任务序号、变更内容、变更事项、实施人、复核人
 
         Returns:
-            implementation_summary 字典，columns 固定为 output_columns 顺序
+            implementation_summary 字典，columns 固定为 5 列顺序
 
         Raises:
             ValueError: 当「变更安排」Sheet 不存在时抛出
@@ -292,104 +289,93 @@ class ExcelParser:
         if target_sheet not in available_sheets:
             raise ValueError(f"Excel 文件中缺少必需的 Sheet 页: {target_sheet}")
 
-        output_columns = self._implementation_summary_config.get(
-            'output_columns', ['序号', '任务', '开始时间', '结束时间', '实施人', '复核人']
-        )
-        column_mapping = self._implementation_summary_config.get('column_mapping', {})
-        date_columns = set(self._implementation_summary_config.get('date_columns', ['开始时间', '结束时间']))
-        auto_sequence = self._implementation_summary_config.get('auto_sequence', True)
-        drop_unnamed = self._implementation_summary_config.get('drop_unnamed_columns', True)
-        
+        # 目标列名及别名映射（固定5列）
+        target_columns = {
+            '任务序号': ['任务序号', '序号', 'No', 'NO'],
+            '变更内容': ['变更内容', '内容'],
+            '变更事项': ['变更事项', '事项'],
+            '实施人': ['实施人', '执行人'],
+            '复核人': ['复核人', '检查人']
+        }
+
         try:
-            df = pd.read_excel(excel_file, sheet_name=target_sheet, header=0)
-            
-            if df.empty:
-                return {
-                    'sheet_name': target_sheet,
-                    'columns': list(output_columns),
-                    'rows': [],
-                    'has_data': False
-                }
-            
-            df = self._clean_dataframe(df)
-            
-            if df.empty:
-                return {
-                    'sheet_name': target_sheet,
-                    'columns': list(output_columns),
-                    'rows': [],
-                    'has_data': False
-                }
-            
-            # 1. 过滤 Unnamed、空列名、Excel 日期序列号（46315 等误作列名）
-            cols_raw = [str(c).strip() if pd.notna(c) else '' for c in df.columns.tolist()]
-            if drop_unnamed:
-                keep_idx = [
-                    i for i, c in enumerate(cols_raw)
-                    if c
-                    and not (c.lower().startswith('unnamed') or c == '')
-                    and not _is_excel_serial_column(c)
-                ]
-                df = df.iloc[:, keep_idx]
-                cols_raw = [str(c).strip() if pd.notna(c) else '' for c in df.columns.tolist()]
-            
-            excel_cols = cols_raw
-            
-            # 2. 建立标准列 -> Excel 列 映射
-            # column_mapping: { "序号": ["任务序号","序号",...], "任务": ["任务名",...], ... }
-            std_to_excel: dict[str, Optional[str]] = {}
-            for std_col in output_columns:
-                aliases = column_mapping.get(std_col, [std_col])
-                if isinstance(aliases, str):
-                    aliases = [aliases]
-                found = None
-                for ec in excel_cols:
-                    ec_norm = ec.strip()
-                    for alias in aliases:
-                        if str(alias).strip() == ec_norm:
-                            found = ec
-                            break
-                    if found:
+            wb = load_workbook(excel_file, read_only=True, data_only=True)
+            ws = wb[target_sheet]
+
+            # 1. 从合并单元格中提取表头（第1行或合并区域的值）
+            header_row = 1  # 表头在第1行（合并单元格的值在左上角）
+
+            # 获取所有列的表头值
+            col_headers = {}
+            for col_idx in range(1, ws.max_column + 1):
+                cell = ws.cell(row=header_row, column=col_idx)
+                value = str(cell.value).strip() if cell.value else ''
+                if value:
+                    col_headers[col_idx] = value
+
+            # 2. 匹配目标列
+            col_mapping = {}  # {标准列名: 列索引}
+            for std_col, aliases in target_columns.items():
+                for col_idx, header in col_headers.items():
+                    # 精确匹配
+                    if header in aliases:
+                        col_mapping[std_col] = col_idx
                         break
-                std_to_excel[std_col] = found
-            
-            # 3. 构建行数据：按 output_columns 顺序
+                    # 部分匹配
+                    for alias in aliases:
+                        if alias in header:
+                            col_mapping[std_col] = col_idx
+                            break
+                    else:
+                        continue
+                    break
+
+            # 3. 读取数据行
+            # 检测数据起始行：如果第2行全是空值或与第1行相同（合并单元格），则从第3行开始
+            data_start_row = 2
+            if ws.max_row >= 2:
+                row2_has_data = False
+                for col_idx in col_mapping.values():
+                    cell = ws.cell(row=2, column=col_idx)
+                    if cell.value and str(cell.value).strip():
+                        row2_has_data = True
+                        break
+                if not row2_has_data:
+                    data_start_row = 3
+
             rows = []
-            for row_idx, row in df.iterrows():
+            for row_idx in range(data_start_row, ws.max_row + 1):
                 cells = []
-                for std_col in output_columns:
-                    excel_col = std_to_excel.get(std_col)
-                    if std_col == '序号':
-                        if excel_col and excel_col in row.index:
-                            val = row.get(excel_col, '')
-                            cells.append('' if pd.isna(val) else self._sanitize_string(str(val)))
-                        elif auto_sequence:
-                            cells.append(str(row_idx + 1))
-                        else:
-                            cells.append('')
-                    elif excel_col and excel_col in row.index:
-                        val = row.get(excel_col, '')
-                        if pd.isna(val):
-                            cells.append('')
-                        elif std_col in date_columns:
-                            cells.append(_excel_serial_to_date(val))
-                        else:
-                            cells.append(self._sanitize_string(str(val)))
+                has_data = False
+                for std_col in ['任务序号', '变更内容', '变更事项', '实施人', '复核人']:
+                    col_idx = col_mapping.get(std_col)
+                    if col_idx:
+                        cell = ws.cell(row=row_idx, column=col_idx)
+                        value = str(cell.value).strip() if cell.value else ''
+                        cells.append(self._sanitize_string(value))
+                        if value:
+                            has_data = True
                     else:
                         cells.append('')
-                rows.append({'cells': cells})
-            
+
+                # 跳过空行
+                if has_data:
+                    rows.append({'cells': cells})
+
+            wb.close()
+
             return {
                 'sheet_name': target_sheet,
-                'columns': list(output_columns),
+                'columns': ['任务序号', '变更内容', '变更事项', '实施人', '复核人'],
                 'rows': rows,
                 'has_data': len(rows) > 0
             }
+
         except Exception as e:
             print(f"警告: 解析实施总表 '{target_sheet}' 时出错: {e}")
             return {
                 'sheet_name': target_sheet,
-                'columns': list(output_columns),
+                'columns': ['任务序号', '变更内容', '变更事项', '实施人', '复核人'],
                 'rows': [],
                 'has_data': False
             }

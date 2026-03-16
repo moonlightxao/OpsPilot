@@ -99,37 +99,41 @@ class TestExcelParserParse:
             parser.parse(str(temp_dir / "not_exist.xlsx"))
     
     def test_implementation_summary_from_first_sheet(self, sample_config, sample_excel):
-        """测试「变更安排」Sheet 解析为 implementation_summary（6 列映射、序号自动生成）"""
+        """测试「变更安排」Sheet 解析为 implementation_summary（固定5列：任务序号、变更内容、变更事项、实施人、复核人）"""
         parser = ExcelParser(config_path=str(sample_config))
         result = parser.parse(str(sample_excel))
 
         impl = result.get('implementation_summary', {})
         assert impl.get('has_data') is True
         assert impl.get('sheet_name') == '变更安排'
-        assert impl.get('columns') == ['序号', '任务', '开始时间', '结束时间', '实施人', '复核人']
+        assert impl.get('columns') == ['任务序号', '变更内容', '变更事项', '实施人', '复核人']
         assert 'rows' in impl
         assert len(impl['rows']) >= 1
-        # 序号列应自动生成
+        # 验证第一行数据
         first_row = impl['rows'][0]
-        assert first_row.get('cells', [])[0] == '1'
+        cells = first_row.get('cells', [])
+        assert cells[0] == '1'  # 任务序号
+        assert cells[1] == '环境检查'  # 变更内容
 
     def test_implementation_summary_unnamed_filtered_and_dates_converted(
         self, sample_config, excel_impl_summary_with_dates_and_unnamed
     ):
-        """测试实施总表：过滤 Unnamed 列、Excel 日期序列号转 YYYY-MM-DD"""
+        """测试实施总表：列名别名映射"""
         parser = ExcelParser(config_path=str(sample_config))
         result = parser.parse(str(excel_impl_summary_with_dates_and_unnamed))
 
         impl = result.get('implementation_summary', {})
         assert impl.get('has_data') is True
-        assert 'Unnamed' not in str(impl.get('columns', []))
+        assert impl.get('columns') == ['任务序号', '变更内容', '变更事项', '实施人', '复核人']
         rows = impl.get('rows', [])
         assert len(rows) >= 1
         cells = rows[0].get('cells', [])
-        # 开始时间、结束时间应为 YYYY-MM-DD 格式
-        # 46315 -> 2026-10-14, 46316 -> 2026-10-15
-        assert cells[2].startswith('2026-')  # 开始时间
-        assert cells[3].startswith('2026-')  # 结束时间
+        # 验证别名映射：序号→任务序号, 内容→变更内容, 事项→变更事项, 执行人→实施人, 检查人→复核人
+        assert cells[0] == '1'  # 任务序号
+        assert cells[1] == '任务A'  # 变更内容
+        assert cells[2] == '事项A'  # 变更事项
+        assert cells[3] == '张三'  # 实施人
+        assert cells[4] == '王五'  # 复核人
 
     def test_excel_serial_to_date(self):
         """测试 Excel 日期序列号转 YYYY-MM-DD"""
