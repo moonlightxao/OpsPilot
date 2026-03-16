@@ -389,12 +389,19 @@ def delete_sheet_mapping(sheet_name: str):
 @config_bp.route('/batch-save', methods=['POST'])
 def batch_save_sheets():
     """
-    批量保存 Sheet 配置（V5 全量覆盖模式）
+    批量保存 Sheet 配置
 
-    V5 更新：
-    - 全量覆盖 sheet_column_mapping 和 priority_rules
-    - 全量重新生成 core_fields
-    - 返回 updated 和 deleted 信息
+    V7 更新：
+    - 支持 merge_mode 参数，可选 'full'（全量覆盖）或 'incremental'（增量合并）
+    - 默认为 'full' 保持向后兼容
+    - 增量合并模式：保留 Excel 中不存在的 Sheet 和章节配置
+    - 全量覆盖模式：删除 Excel 中不存在的 Sheet 和章节配置
+
+    请求体:
+    {
+        "sheets": [...],
+        "merge_mode": "incremental" | "full"  // 可选，默认 "full"
+    }
     """
     try:
         data = request.get_json()
@@ -408,24 +415,58 @@ def batch_save_sheets():
         if not sheets:
             return jsonify({"success": False, "error": "sheets 不能为空"}), 400
 
+        # 获取合并模式，默认为全量覆盖
+        merge_mode = data.get('merge_mode', 'full')
+        if merge_mode not in ['full', 'incremental']:
+            return jsonify({"success": False, "error": "merge_mode 必须是 'full' 或 'incremental'"}), 400
+
         from ..services import BackupService
         BackupService().create_backup()
 
-        result = config_service.batch_save_sheets(sheets)
+        # 根据模式选择保存方法
+        if merge_mode == 'incremental':
+            result = config_service.batch_save_sheets_incremental(sheets)
 
-        # 构建响应消息
-        message_parts = ["配置已保存"]
-        if result.get("deleted", {}).get("sheet_column_mapping"):
-            message_parts.append(f"已清理 {len(result['deleted']['sheet_column_mapping'])} 个废弃 Sheet 配置")
-        if result.get("deleted", {}).get("core_fields"):
-            message_parts.append(f"已清理 {len(result['deleted']['core_fields'])} 个废弃核心字段")
+            # 构建响应消息（增量模式）
+            added_mapping = result.get("added", {}).get("sheet_column_mapping", [])
+            updated_mapping = result.get("updated", {}).get("sheet_column_mapping", [])
+            added_priority = result.get("added", {}).get("priority_rules", [])
 
-        return jsonify({
-            "success": True,
-            "message": "，".join(message_parts),
-            "updated": result.get("updated", {}),
-            "deleted": result.get("deleted", {})
-        })
+            message_parts = ["配置已保存（增量模式）"]
+            if added_mapping:
+                message_parts.append(f"新增 {len(added_mapping)} 个列映射")
+            if updated_mapping:
+                message_parts.append(f"更新 {len(updated_mapping)} 个列映射")
+            if added_priority:
+                message_parts.append(f"新增 {len(added_priority)} 个章节")
+
+            return jsonify({
+                "success": True,
+                "message": "，".join(message_parts),
+                "updated": {
+                    "sheet_column_mapping": added_mapping + updated_mapping,
+                    "priority_rules": added_priority
+                },
+                "mode": "incremental"
+            })
+        else:
+            # 全量覆盖模式
+            result = config_service.batch_save_sheets(sheets)
+
+            # 构建响应消息
+            message_parts = ["配置已保存"]
+            if result.get("deleted", {}).get("sheet_column_mapping"):
+                message_parts.append(f"已清理 {len(result['deleted']['sheet_column_mapping'])} 个废弃 Sheet 配置")
+            if result.get("deleted", {}).get("core_fields"):
+                message_parts.append(f"已清理 {len(result['deleted']['core_fields'])} 个废弃核心字段")
+
+            return jsonify({
+                "success": True,
+                "message": "，".join(message_parts),
+                "updated": result.get("updated", {}),
+                "deleted": result.get("deleted", {}),
+                "mode": "full"
+            })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

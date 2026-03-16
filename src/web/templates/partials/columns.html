@@ -28,8 +28,9 @@
     </div>
 </div>
 
+<!-- Sheet 映射编辑弹窗（V7 标签化列编辑器） -->
 <div id="sheet-modal" class="modal-overlay hidden">
-    <div class="modal-content p-6 modal-xl">
+    <div class="modal-content p-6 modal-xl" style="max-width: 750px;">
         <h3 class="text-lg font-semibold mb-4" id="sheet-modal-title">新增 Sheet 映射</h3>
         <div class="space-y-4">
             <div>
@@ -37,12 +38,21 @@
                 <input type="text" id="sheet-name" class="w-full border rounded px-3 py-2" placeholder="如：数据库脚本部署">
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">输出列（逗号分隔）</label>
-                <input type="text" id="sheet-columns" class="w-full border rounded px-3 py-2" placeholder="如：脚本名称,执行顺序,数据库,执行人,备注">
+                <label class="block text-sm font-medium text-gray-700 mb-1">输出列（可拖拽排序，点击 × 删除）</label>
+                <div id="column-tags-container" class="column-tag-container">
+                    <!-- 列标签将通过 JS 动态渲染 -->
+                    <div class="column-tag-input">
+                        <input type="text" id="new-column-input" placeholder="输入列名" onkeydown="handleColumnInputKeydown(event)">
+                        <button onclick="addColumnFromInput()" class="ml-2 px-3 py-1 bg-primary text-white text-sm rounded hover:bg-blue-600">添加</button>
+                    </div>
+                </div>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">列名映射（每行一个：标准列名=别名1,别名2）</label>
-                <textarea id="sheet-mapping" class="w-full border rounded px-3 py-2 h-32" placeholder="脚本名称=脚本名称,任务名,任务名称&#10;执行顺序=执行顺序,顺序,序号"></textarea>
+                <label class="block text-sm font-medium text-gray-700 mb-1">列名映射（点击展开编辑别名）</label>
+                <div id="mapping-accordion" class="space-y-2">
+                    <!-- 折叠面板将通过 JS 动态渲染 -->
+                    <p class="text-gray-400 text-sm py-4 text-center">请先添加输出列</p>
+                </div>
             </div>
         </div>
         <div class="flex justify-end gap-2 mt-6">
@@ -89,6 +99,16 @@
                     <li>新增章节的优先级将自动递增</li>
                 </ul>
             </div>
+
+            <!-- 增量更新选项 -->
+            <div class="merge-option">
+                <input type="checkbox" id="merge-mode-checkbox" checked>
+                <label for="merge-mode-checkbox" class="ml-2">
+                    <span class="font-medium">保留已有章节配置（增量更新）</span>
+                    <span class="block text-sm mt-0.5">保留 Excel 中不存在的 Sheet 配置和章节排序，仅新增/更新当前 Excel 中的内容</span>
+                </label>
+                <span class="hint">推荐勾选</span>
+            </div>
         </div>
         
         <div class="flex justify-end gap-2 mt-6">
@@ -106,10 +126,14 @@
     let batchSaveData = null;
     let selectedMappings = new Set();
 
-    document.addEventListener('DOMContentLoaded', function() { 
-        loadMappings(); 
+    // V7 标签化列编辑器状态
+    let currentColumns = [];  // 当前编辑的列列表 [{name: '列名', aliases: ['别名1', '别名2']}]
+    let columnSortable = null; // SortableJS 实例
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadMappings();
         setActiveNav('columns');
-        
+
         document.getElementById('batch-save-file').addEventListener('change', handleBatchSaveFile);
         document.getElementById('excel-identify-file').addEventListener('change', handleExcelIdentifyFile);
     });
@@ -125,22 +149,22 @@
     function renderMappings() {
         const container = document.getElementById('mappings-list');
         const entries = Object.entries(mappingsData);
-        if (entries.length === 0) { 
-            container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无 Sheet 映射配置，点击「Excel 一键保存」快速导入</p>'; 
-            return; 
+        if (entries.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-center py-4">暂无 Sheet 映射配置，点击「Excel 一键保存」快速导入</p>';
+            return;
         }
         container.innerHTML = entries.map(([name, config]) => {
             const isSelected = selectedMappings.has(name);
             return `
                 <div class="border rounded-lg p-4 ${isSelected ? 'ring-2 ring-primary bg-blue-50' : ''}">
                     <div class="flex items-start gap-3">
-                        <input type="checkbox" class="mt-1" ${isSelected ? 'checked' : ''} 
+                        <input type="checkbox" class="mt-1" ${isSelected ? 'checked' : ''}
                                onchange="toggleMappingSelection('${name}')">
                         <div class="flex-1">
                             <span class="font-medium">${name}</span>
                             <p class="text-sm text-gray-600 mt-1">输出列: ${(config.columns || []).join(', ')}</p>
                             <div class="mt-2 flex flex-wrap gap-1">
-                                ${Object.entries(config.column_mapping || {}).map(([col, aliases]) => 
+                                ${Object.entries(config.column_mapping || {}).map(([col, aliases]) =>
                                     `<span class="tag">${col}: ${aliases.slice(0, 2).join(', ')}${aliases.length > 2 ? '...' : ''}</span>`
                                 ).join('')}
                             </div>
@@ -171,7 +195,7 @@
         const count = selectedMappings.size;
         const bar = document.getElementById('batch-mappings-bar');
         const countEl = document.getElementById('mappings-selected-count');
-        
+
         if (count > 0) {
             bar.classList.remove('hidden');
             countEl.textContent = count;
@@ -184,7 +208,7 @@
     function batchDeleteMappings() {
         const count = selectedMappings.size;
         if (count === 0) return;
-        
+
         const names = Array.from(selectedMappings);
         showConfirm('批量删除确认', `确定要删除选中的 ${count} 个 Sheet 列映射吗？此操作不可撤销。`, async () => {
             try {
@@ -205,17 +229,29 @@
         });
     }
 
+    // ========== V7 标签化列编辑器 ==========
+
     function showAddSheetModal() {
         editingSheet = null;
         document.getElementById('sheet-modal-title').textContent = '新增 Sheet 映射';
         document.getElementById('sheet-name').value = '';
-        document.getElementById('sheet-columns').value = '';
-        document.getElementById('sheet-mapping').value = '';
         document.getElementById('sheet-name').disabled = false;
+        // 初始化空状态
+        currentColumns = [];
+        renderColumnTags();
+        renderMappingAccordion();
         document.getElementById('sheet-modal').classList.remove('hidden');
     }
 
-    function closeSheetModal() { document.getElementById('sheet-modal').classList.add('hidden'); }
+    function closeSheetModal() {
+        document.getElementById('sheet-modal').classList.add('hidden');
+        // 清理状态
+        currentColumns = [];
+        if (columnSortable) {
+            columnSortable.destroy();
+            columnSortable = null;
+        }
+    }
 
     function editSheet(name) {
         const config = mappingsData[name];
@@ -224,28 +260,273 @@
         document.getElementById('sheet-modal-title').textContent = '编辑 Sheet 映射';
         document.getElementById('sheet-name').value = name;
         document.getElementById('sheet-name').disabled = true;
-        document.getElementById('sheet-columns').value = (config.columns || []).join(', ');
-        const mappingLines = Object.entries(config.column_mapping || {}).map(([col, aliases]) => `${col}=${aliases.join(',')}`);
-        document.getElementById('sheet-mapping').value = mappingLines.join('\n');
+
+        // 将配置转换为 V7 数据结构
+        currentColumns = (config.columns || []).map(col => ({
+            name: col,
+            aliases: (config.column_mapping || {})[col] || [col]
+        }));
+
+        renderColumnTags();
+        renderMappingAccordion();
         document.getElementById('sheet-modal').classList.remove('hidden');
     }
 
+    // 渲染列标签
+    function renderColumnTags() {
+        const container = document.getElementById('column-tags-container');
+
+        if (currentColumns.length === 0) {
+            container.innerHTML = `
+                <p class="text-gray-400 text-sm w-full text-center py-2">请添加输出列</p>
+                <div class="column-tag-input">
+                    <input type="text" id="new-column-input" placeholder="输入列名" onkeydown="handleColumnInputKeydown(event)">
+                    <button onclick="addColumnFromInput()" class="ml-2 px-3 py-1 bg-primary text-white text-sm rounded hover:bg-blue-600">添加</button>
+                </div>
+            `;
+        } else {
+            container.innerHTML = currentColumns.map((col, index) => `
+                <div class="column-tag" data-index="${index}" data-name="${col.name}">
+                    <span>${col.name}</span>
+                    <span class="remove" onclick="removeColumn(${index})">×</span>
+                </div>
+            `).join('') + `
+                <div class="column-tag-input">
+                    <input type="text" id="new-column-input" placeholder="输入列名" onkeydown="handleColumnInputKeydown(event)">
+                    <button onclick="addColumnFromInput()" class="ml-2 px-3 py-1 bg-primary text-white text-sm rounded hover:bg-blue-600">添加</button>
+                </div>
+            `;
+        }
+
+        // 初始化拖拽排序
+        initColumnSortable();
+    }
+
+    // 初始化拖拽排序
+    function initColumnSortable() {
+        const container = document.getElementById('column-tags-container');
+        if (!container) return;
+
+        // 销毁旧实例
+        if (columnSortable) {
+            columnSortable.destroy();
+        }
+
+        columnSortable = new Sortable(container, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            filter: '.column-tag-input',  // 不允许拖拽输入框
+            onEnd: function(evt) {
+                // 更新 currentColumns 顺序
+                const newOrder = [];
+                container.querySelectorAll('.column-tag').forEach(tag => {
+                    const index = parseInt(tag.dataset.index);
+                    if (index >= 0 && index < currentColumns.length) {
+                        newOrder.push(currentColumns[index]);
+                    }
+                });
+                currentColumns = newOrder;
+                // 重新渲染以更新索引
+                renderColumnTags();
+                renderMappingAccordion();
+            }
+        });
+    }
+
+    // 处理输入框回车
+    function handleColumnInputKeydown(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addColumnFromInput();
+        }
+    }
+
+    // 从输入框添加列
+    function addColumnFromInput() {
+        const input = document.getElementById('new-column-input');
+        if (!input) return;
+
+        const name = input.value.trim();
+        if (!name) {
+            showToast('请输入列名', 'error');
+            return;
+        }
+
+        // 检查重复
+        if (currentColumns.some(col => col.name === name)) {
+            showToast('列名已存在', 'error');
+            return;
+        }
+
+        // 添加新列
+        currentColumns.push({
+            name: name,
+            aliases: [name]  // 默认包含自己
+        });
+
+        // 清空输入框
+        input.value = '';
+
+        // 重新渲染
+        renderColumnTags();
+        renderMappingAccordion();
+    }
+
+    // 删除列
+    function removeColumn(index) {
+        if (index < 0 || index >= currentColumns.length) return;
+
+        const removed = currentColumns.splice(index, 1)[0];
+        renderColumnTags();
+        renderMappingAccordion();
+    }
+
+    // 渲染折叠面板
+    function renderMappingAccordion() {
+        const container = document.getElementById('mapping-accordion');
+
+        if (currentColumns.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-sm py-4 text-center">请先添加输出列</p>';
+            return;
+        }
+
+        container.innerHTML = currentColumns.map((col, index) => `
+            <div class="accordion-item" data-index="${index}">
+                <div class="accordion-header" onclick="toggleAccordion(${index})">
+                    <div>
+                        <span class="column-name">${col.name}</span>
+                        <span class="alias-count ml-2">${col.aliases.length} 个别名</span>
+                    </div>
+                    <span class="toggle-icon">▶</span>
+                </div>
+                <div class="accordion-body" id="accordion-body-${index}">
+                    <div class="flex flex-wrap items-start">
+                        ${col.aliases.map((alias, aliasIndex) => `
+                            <span class="alias-tag">
+                                ${alias}
+                                <span class="remove" onclick="removeAlias(${index}, ${aliasIndex})">×</span>
+                            </span>
+                        `).join('')}
+                        <div class="alias-input-wrapper">
+                            <input type="text" id="alias-input-${index}" placeholder="新别名"
+                                   onkeydown="handleAliasInputKeydown(event, ${index})">
+                            <button onclick="addAliasFromInput(${index})">添加</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // 切换折叠面板
+    function toggleAccordion(index) {
+        const body = document.getElementById(`accordion-body-${index}`);
+        const header = body.previousElementSibling;
+
+        if (body.classList.contains('show')) {
+            body.classList.remove('show');
+            header.classList.remove('expanded');
+        } else {
+            body.classList.add('show');
+            header.classList.add('expanded');
+        }
+    }
+
+    // 处理别名输入框回车
+    function handleAliasInputKeydown(event, colIndex) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addAliasFromInput(colIndex);
+        }
+    }
+
+    // 从输入框添加别名
+    function addAliasFromInput(colIndex) {
+        const input = document.getElementById(`alias-input-${colIndex}`);
+        if (!input) return;
+
+        const alias = input.value.trim();
+        if (!alias) {
+            showToast('请输入别名', 'error');
+            return;
+        }
+
+        // 检查重复
+        if (currentColumns[colIndex].aliases.includes(alias)) {
+            showToast('别名已存在', 'error');
+            return;
+        }
+
+        // 添加别名
+        currentColumns[colIndex].aliases.push(alias);
+
+        // 清空输入框
+        input.value = '';
+
+        // 重新渲染（只更新别名数量显示）
+        const countEl = document.querySelector(`.accordion-item[data-index="${colIndex}"] .alias-count`);
+        if (countEl) {
+            countEl.textContent = `${currentColumns[colIndex].aliases.length} 个别名`;
+        }
+
+        // 重新渲染折叠面板内容
+        renderMappingAccordion();
+
+        // 保持展开状态
+        const body = document.getElementById(`accordion-body-${colIndex}`);
+        const header = body.previousElementSibling;
+        body.classList.add('show');
+        header.classList.add('expanded');
+    }
+
+    // 删除别名
+    function removeAlias(colIndex, aliasIndex) {
+        if (colIndex < 0 || colIndex >= currentColumns.length) return;
+        const col = currentColumns[colIndex];
+        if (aliasIndex < 0 || aliasIndex >= col.aliases.length) return;
+
+        // 至少保留一个别名
+        if (col.aliases.length <= 1) {
+            showToast('至少需要保留一个别名', 'warning');
+            return;
+        }
+
+        col.aliases.splice(aliasIndex, 1);
+
+        // 重新渲染
+        renderMappingAccordion();
+
+        // 保持展开状态
+        const body = document.getElementById(`accordion-body-${colIndex}`);
+        const header = body.previousElementSibling;
+        body.classList.add('show');
+        header.classList.add('expanded');
+    }
+
+    // 保存 Sheet 映射（V7 新版本）
     async function saveSheetMapping() {
         const name = document.getElementById('sheet-name').value.trim();
-        if (!name) { showToast('请输入 Sheet 名称', 'error'); return; }
-        const columnsStr = document.getElementById('sheet-columns').value.trim();
-        const columns = columnsStr ? columnsStr.split(',').map(c => c.trim()).filter(c => c) : [];
-        const mappingStr = document.getElementById('sheet-mapping').value.trim();
-        const columnMapping = {};
-        if (mappingStr) {
-            mappingStr.split('\n').forEach(line => {
-                const [col, aliasesStr] = line.split('=').map(s => s.trim());
-                if (col && aliasesStr) {
-                    columnMapping[col] = aliasesStr.split(',').map(a => a.trim()).filter(a => a);
-                }
-            });
+        if (!name) {
+            showToast('请输入 Sheet 名称', 'error');
+            return;
         }
+
+        if (currentColumns.length === 0) {
+            showToast('请至少添加一个输出列', 'error');
+            return;
+        }
+
+        // 转换为 API 格式
+        const columns = currentColumns.map(col => col.name);
+        const columnMapping = {};
+        currentColumns.forEach(col => {
+            columnMapping[col.name] = col.aliases;
+        });
+
         const sheetConfig = { columns, column_mapping: columnMapping };
+
         try {
             const res = await apiRequest(`/api/config/sheet-column-mapping/${encodeURIComponent(name)}`, 'PUT', sheetConfig);
             if (res.success) {
@@ -262,18 +543,20 @@
             } else {
                 showToast(res.error || '保存失败', 'error');
             }
-        } catch (err) { showToast('保存失败', 'error'); }
+        } catch (err) {
+            showToast('保存失败', 'error');
+        }
     }
 
     function deleteSheet(name) {
         showConfirm('删除 Sheet 映射', `确定要删除 "${name}" 的列映射吗？`, async () => {
             try {
                 const res = await apiRequest(`/api/config/sheet-column-mapping/${encodeURIComponent(name)}`, 'DELETE');
-                if (res.success) { 
-                    showToast('Sheet 映射已删除', 'success'); 
+                if (res.success) {
+                    showToast('Sheet 映射已删除', 'success');
                     selectedMappings.delete(name);
                     updateBatchMappingsUI();
-                    loadMappings(); 
+                    loadMappings();
                 }
                 else { showToast(res.error || '删除失败', 'error'); }
             } catch (err) { showToast('删除失败', 'error'); }
@@ -281,15 +564,15 @@
     }
 
     // ========== Excel 辅助识别 ==========
-    
+
     function showExcelIdentifyModal() {
         document.getElementById('excel-identify-modal').classList.remove('hidden');
         document.getElementById('excel-identify-file').value = '';
         document.getElementById('excel-identify-result').classList.add('hidden');
     }
 
-    function closeExcelIdentifyModal() { 
-        document.getElementById('excel-identify-modal').classList.add('hidden'); 
+    function closeExcelIdentifyModal() {
+        document.getElementById('excel-identify-modal').classList.add('hidden');
     }
 
     async function handleExcelIdentifyFile(e) {
@@ -321,31 +604,33 @@
     }
 
     // ========== Excel 一键保存 ==========
-    
+
     function showBatchSaveModal() {
         batchSaveData = null;
         document.getElementById('batch-save-modal').classList.remove('hidden');
         document.getElementById('batch-save-file').value = '';
         document.getElementById('batch-save-preview').classList.add('hidden');
         document.getElementById('btn-batch-save').disabled = true;
+        // 默认勾选增量更新
+        document.getElementById('merge-mode-checkbox').checked = true;
     }
 
-    function closeBatchSaveModal() { 
-        document.getElementById('batch-save-modal').classList.add('hidden'); 
+    function closeBatchSaveModal() {
+        document.getElementById('batch-save-modal').classList.add('hidden');
     }
 
     async function handleBatchSaveFile(e) {
         const file = e.target.files[0];
         if (!file) return;
-        
+
         const formData = new FormData();
         formData.append('file', file);
-        
+
         try {
             showToast('正在解析 Excel...', 'info');
             const res = await fetch('/api/upload/excel/preview', { method: 'POST', body: formData });
             const data = await res.json();
-            
+
             if (data.success) {
                 batchSaveData = data;
                 renderBatchSavePreview(data);
@@ -446,10 +731,14 @@
         btn.disabled = true;
         btn.textContent = '保存中...';
 
+        // 获取增量更新模式
+        const mergeMode = document.getElementById('merge-mode-checkbox').checked;
+
         try {
             // 1. 保存列映射和章节排序
             const res = await apiRequest('/api/config/batch-save', 'POST', {
-                sheets: batchSaveData.sheets
+                sheets: batchSaveData.sheets,
+                merge_mode: mergeMode ? 'incremental' : 'full'
             });
 
             if (res.success) {
@@ -484,6 +773,9 @@
                 }
                 if (actionTypeMessage) {
                     message += `，${actionTypeMessage}`;
+                }
+                if (mergeMode) {
+                    message += '（增量更新）';
                 }
 
                 showToast(message, 'success');

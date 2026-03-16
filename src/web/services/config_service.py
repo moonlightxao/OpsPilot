@@ -442,6 +442,88 @@ class ConfigService:
 
     # ========== 批量保存相关 ==========
 
+    def batch_save_sheets_incremental(self, sheets: list) -> dict:
+        """
+        增量合并保存 Sheet 配置（V7 新增）
+
+        与全量覆盖不同，增量合并：
+        - 保留 Excel 中不存在的 Sheet 配置（sheet_column_mapping）
+        - 保留 Excel 中不存在的章节配置（priority_rules）
+        - 新 Sheet 追加到 sheet_column_mapping
+        - 新章节追加到 priority_rules 末尾
+        - 全量重新生成 core_fields（需要同步所有列名）
+
+        Args:
+            sheets: Sheet 列表，每个元素包含 name, columns, is_first_sheet
+
+        Returns:
+            更新结果 {
+                "updated": {"sheet_column_mapping": [...], "priority_rules": [...]},
+                "added": {"sheet_column_mapping": [...], "priority_rules": [...]},
+                "skipped": {"sheet_column_mapping": [...], "priority_rules": [...]}
+            }
+        """
+        config = self.load()
+
+        # 获取现有配置
+        existing_sheet_mapping = config.get("sheet_column_mapping", {})
+        existing_priority_rules = config.get("priority_rules", {})
+
+        # 计算最大优先级
+        max_priority = max(existing_priority_rules.values()) if existing_priority_rules else 0
+
+        result = {
+            "updated": {"sheet_column_mapping": [], "priority_rules": []},
+            "added": {"sheet_column_mapping": [], "priority_rules": []},
+            "skipped": {"sheet_column_mapping": [], "priority_rules": []}
+        }
+
+        for sheet in sheets:
+            name = sheet.get("name")
+            columns = sheet.get("columns", [])
+            is_first = sheet.get("is_first_sheet", False)
+
+            if not name:
+                continue
+
+            # 1. 生成列映射（列名同时作为标准列名和别名）
+            column_mapping = {str(col): [str(col)] for col in columns}
+            new_sheet_config = {
+                "columns": [str(col) for col in columns],
+                "column_mapping": column_mapping
+            }
+
+            # 检查是否已存在
+            if name in existing_sheet_mapping:
+                existing_sheet_mapping[name] = new_sheet_config
+                result["updated"]["sheet_column_mapping"].append(name)
+            else:
+                existing_sheet_mapping[name] = new_sheet_config
+                result["added"]["sheet_column_mapping"].append(name)
+
+            # 2. 处理章节排序（仅非第一个 Sheet）
+            if not is_first:
+                if name in existing_priority_rules:
+                    # 已存在，不更新优先级
+                    result["skipped"]["priority_rules"].append(name)
+                else:
+                    # 新章节，追加到末尾
+                    max_priority += 10
+                    existing_priority_rules[name] = max_priority
+                    result["added"]["priority_rules"].append(name)
+
+        # 更新配置
+        config["sheet_column_mapping"] = existing_sheet_mapping
+        config["priority_rules"] = existing_priority_rules
+
+        # 保存配置（在同步 core_fields 之前）
+        self.save(config)
+
+        # 全量同步 core_fields
+        self._sync_core_fields_full(config, existing_sheet_mapping)
+
+        return result
+
     def batch_save_sheets(self, sheets: list) -> dict:
         """
         批量保存 Sheet 配置（用于 Excel 一键保存功能）
