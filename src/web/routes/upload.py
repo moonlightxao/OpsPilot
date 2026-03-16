@@ -126,21 +126,33 @@ def upload_excel():
         # 读取所有 Sheet 的表头
         all_sheets = {}
         sheet_names = []
+        # 变更安排作为特殊 Sheet 保留，用于实施总表
+        IMPL_SUMMARY_SHEET_NAME = "变更安排"
 
         with pd.ExcelFile(tmp_path) as xl:
             sheet_names = xl.sheet_names
             for sheet_name in sheet_names:
+                # 过滤规则1：Sheet 名称必须以 "HIS" 开头（不区分大小写），但"变更安排"除外
+                if sheet_name != IMPL_SUMMARY_SHEET_NAME and not sheet_name.upper().startswith("HIS"):
+                    continue
+
                 df = pd.read_excel(xl, sheet_name=sheet_name, nrows=0)
                 columns = df.columns.tolist()
                 # 过滤掉 Unnamed 列
                 columns = [col for col in columns if not str(col).startswith('Unnamed')]
+
+                # 过滤规则2：只有列头但无数据行的空 Sheet 应被过滤
+                df_data_check = pd.read_excel(xl, sheet_name=sheet_name, nrows=1)
+                if df_data_check.empty:
+                    continue
+
                 all_sheets[sheet_name] = columns
 
         return jsonify({
             "success": True,
             "sheets": all_sheets,
             "sheet_names": list(all_sheets.keys()),
-            "columns": all_sheets.get(sheet_names[0], []),
+            "columns": list(all_sheets.values())[0] if all_sheets else [],
             "count": sum(len(cols) for cols in all_sheets.values())
         })
 
@@ -228,15 +240,27 @@ def upload_excel_preview():
         # 读取所有 Sheet 并识别操作类型
         sheets = []
         recognized_action_types = {}
+        # 变更安排作为特殊 Sheet 保留，用于实施总表
+        IMPL_SUMMARY_SHEET_NAME = "变更安排"
 
         with pd.ExcelFile(tmp_path) as xl:
             sheet_names = xl.sheet_names
             for idx, sheet_name in enumerate(sheet_names):
+                # 过滤规则1：Sheet 名称必须以 "HIS" 开头（不区分大小写），但"变更安排"除外
+                if sheet_name != IMPL_SUMMARY_SHEET_NAME and not sheet_name.upper().startswith("HIS"):
+                    continue
+
                 # 读取表头
                 df_header = pd.read_excel(xl, sheet_name=sheet_name, nrows=0)
                 columns = df_header.columns.tolist()
                 # 过滤掉 Unnamed 列
                 columns = [col for col in columns if not str(col).startswith('Unnamed')]
+
+                # 过滤规则2：只有列头但无数据行的空 Sheet 应被过滤
+                # 读取一行数据来检查是否有实际内容
+                df_data_check = pd.read_excel(xl, sheet_name=sheet_name, nrows=1)
+                if df_data_check.empty:
+                    continue
 
                 sheets.append({
                     "name": sheet_name,
