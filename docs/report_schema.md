@@ -1,9 +1,10 @@
-# report.json 数据协议规范 (v2.1 - 输出与样例对齐)
+# report.json 数据协议规范 (v2.2 - 摘要生成增强)
 
 ## 概述
 `report.json` 是解析层（Parser）与渲染层（Renderer）之间的中间态数据结构。
 **v2.0 变更**：适配 `docxtpl` 模板引擎，结构设计支持 Jinja2 `{% for %}` 循环。
 **v2.1 变更**：新增 `implementation_summary` 字段，支持第2章「实施总表」独立输出。
+**v2.2 变更**：新增 `meta` 下的摘要字段 `application_name`、`change_reason`、`change_impact`，支持第一章自动生成摘要。
 
 ## 设计原则（docxtpl 适配）
 
@@ -18,7 +19,10 @@
   "meta": {
     "source_file": "string - 原始 Excel 文件名",
     "generated_at": "string - ISO 8601 时间戳",
-    "version": "string - 协议版本号，当前为 2.0"
+    "version": "string - 协议版本号，当前为 2.2",
+    "application_name": "string - 变更涉及的应用名称，多个用顿号分隔",
+    "change_reason": "string - 变更原因和目的描述",
+    "change_impact": "string - 变更影响范围描述"
   },
   "summary": {
     "total_tasks": "integer - 任务总数",
@@ -117,7 +121,10 @@
   "meta": {
     "source_file": "上线checklist.xlsx",
     "generated_at": "2026-02-22T10:00:00Z",
-    "version": "2.0"
+    "version": "2.2",
+    "application_name": "订单系统、支付服务、库存管理",
+    "change_reason": "本次变更主要涉及应用配置调整和数据库脚本部署，旨在优化系统性能并修复已知问题。",
+    "change_impact": "本次变更涉及3个应用配置修改，建议在业务低峰期执行，预计影响范围有限。"
   },
   "summary": {
     "total_tasks": 5,
@@ -200,6 +207,14 @@
 | 变更项 | v2.0 | v2.1 | 原因 |
 |--------|------|------|------|
 | 实施总表 | 无 | `implementation_summary` | PRD 要求 Sheet 1 作为第2章主体表格输出 |
+
+## v2.1 → v2.2 变更说明
+
+| 变更项 | v2.1 | v2.2 | 原因 |
+|--------|------|------|------|
+| meta.application_name | 无 | 变更应用名称 | 支持第一章「变更应用」自动填充 |
+| meta.change_reason | 无 | 变更原因描述 | 支持第一章「变更原因和目的」LLM 生成 |
+| meta.change_impact | 无 | 变更影响描述 | 支持第一章「变更影响」LLM 生成 |
 
 ## v2.1 实施总表列规范（2026-02-23 修订）
 
