@@ -15,6 +15,7 @@ OpsPilot MCP Server
 
 import json
 import sys
+import yaml
 from pathlib import Path
 from typing import Optional
 
@@ -32,21 +33,49 @@ from src.renderer.template_renderer import TemplateRenderer
 mcp = FastMCP("OpsPilot")
 
 
+def _create_llm_client_from_config(config_path: str):
+    """
+    根据配置文件创建 LLM 客户端（如果配置启用）
+
+    Args:
+        config_path: 规则配置文件路径
+
+    Returns:
+        LLM 客户端实例，或 None
+    """
+    try:
+        config_file = Path(config_path)
+        if not config_file.is_absolute():
+            config_file = project_root / config_path
+
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        llm_config = config.get('summary_extraction', {}).get('llm_summary', {})
+        if llm_config.get('enabled', False):
+            from src.llm import create_llm_client
+            return create_llm_client(llm_config)
+    except Exception as e:
+        pass  # LLM 不可用时使用默认行为
+
+    return None
+
+
 @mcp.tool()
 def opspilot_analyze(
-    excel_path: str, 
+    excel_path: str,
     config_path: str = "config/rules.yaml"
 ) -> dict:
     """
     解析 Excel 文件，生成结构化分析数据
-    
+
     Args:
         excel_path: Excel 文件路径（绝对路径或相对于项目根目录）
         config_path: 规则配置文件路径，默认 config/rules.yaml
-    
+
     Returns:
         report.json 结构化数据（符合 docs/report_schema.md v2.0 规范）
-        
+
     Raises:
         FileNotFoundError: Excel 文件或配置文件不存在
         ValueError: 解析过程中出现错误
@@ -55,20 +84,23 @@ def opspilot_analyze(
     excel_file = Path(excel_path)
     if not excel_file.is_absolute():
         excel_file = project_root / excel_path
-    
+
     config_file = Path(config_path)
     if not config_file.is_absolute():
         config_file = project_root / config_path
-    
+
     # 验证文件存在
     if not excel_file.exists():
         raise FileNotFoundError(f"Excel 文件不存在: {excel_file}")
     if not config_file.exists():
         raise FileNotFoundError(f"配置文件不存在: {config_file}")
-    
+
     # 执行解析
     try:
-        parser = ExcelParser(str(config_file))
+        # 创建 LLM 客户端（如果配置启用）
+        llm_client = _create_llm_client_from_config(str(config_file))
+
+        parser = ExcelParser(str(config_file), llm_client=llm_client)
         report = parser.parse(str(excel_file))
         return report
     except Exception as e:
@@ -183,35 +215,30 @@ def opspilot_assess_risk(
     """
     from src.parser.risk_detector import RiskDetector
 
-    # 1. 解析 Excel
-    report = opspilot_analyze(excel_path, config_path)
+    # 解析配置文件路径
+    config_file = Path(config_path)
+    if not config_file.is_absolute():
+        config_file = project_root / config_path
 
-    # 2. 初始化风险检测器
+    # 1. 创建 LLM 客户端（如果启用）
     llm_client = None
     if use_llm:
         try:
-            from src.llm import create_llm_client
-            import yaml
-
-            config_file = Path(config_path)
-            if not config_file.is_absolute():
-                config_file = project_root / config_path
-
             with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             llm_config = config.get("risk_detection", {}).get("llm", {})
             if llm_config.get("enabled"):
+                from src.llm import create_llm_client
                 llm_client = create_llm_client(llm_config)
         except Exception as e:
             pass  # LLM 不可用时使用内置词库
 
-    # 获取配置用于风险检测器
-    config_file = Path(config_path)
-    if not config_file.is_absolute():
-        config_file = project_root / config_path
+    # 2. 解析 Excel
+    parser = ExcelParser(str(config_file), llm_client=llm_client)
+    report = parser.parse(str(project_root / excel_path) if not Path(excel_path).is_absolute() else excel_path)
 
-    parser = ExcelParser(str(config_file))
+    # 3. 初始化风险检测器（复用已有的 LLM 客户端）
     detector = RiskDetector(parser._config, llm_client)
 
     # 3. 遍历所有操作组进行风险评估

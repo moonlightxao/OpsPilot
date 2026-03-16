@@ -7,6 +7,10 @@ Excel Parser Module
 1. 防御性编程：处理空值、非法字符及缺失 Sheet 的边界情况
 2. 动态表头：基于 rules.yaml 中的 core_fields 别名匹配
 3. 可读性：复杂聚合环节附带详细注释
+
+职责拆分 (Phase 3.3):
+- ExcelReader: Excel 数据读取和基础清洗
+- ExcelParser: 配置加载、动态表头解析、数据聚合、风险评估
 """
 
 import re
@@ -17,10 +21,12 @@ from typing import Any, Optional
 
 import pandas as pd
 import yaml
-from openpyxl import load_workbook
 
 # 抑制 openpyxl 的 DataValidation 警告
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+
+from .excel_reader import ExcelReader
+from .summary_generator import SummaryGenerator
 
 
 def _excel_serial_to_date(val: Any) -> str:
@@ -84,12 +90,13 @@ class ExcelParser:
     # 非法字符正则（控制字符和不可见字符）
     ILLEGAL_CHAR_PATTERN = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]')
     
-    def __init__(self, config_path: str = "config/rules.yaml"):
+    def __init__(self, config_path: str = "config/rules.yaml", llm_client=None):
         """
         初始化解析器
-        
+
         Args:
             config_path: 规则配置文件路径
+            llm_client: LLM 客户端实例（可选），由外部注入
         """
         self.config_path = Path(config_path)
         self._config: dict = {}
@@ -99,7 +106,9 @@ class ExcelParser:
         self._high_risk_keywords: list = []
         self._sheet_column_mapping: dict = {}
         self._default_columns: list = []
-        
+        self._summary_extraction_config: dict = {}
+        self._llm_client = llm_client  # 外部注入的 LLM 客户端
+
         self._load_config()
     
     def _load_config(self) -> None:
@@ -118,6 +127,7 @@ class ExcelParser:
         self._sheet_column_mapping = self._config.get('sheet_column_mapping', {})
         self._default_columns = self._config.get('default_columns', [])
         self._implementation_summary_config = self._config.get('implementation_summary', {})
+        self._summary_extraction_config = self._config.get('summary_extraction', {})
     
     def get_sheets(self) -> list[str]:
         """
@@ -136,22 +146,20 @@ class ExcelParser:
     def parse(self, excel_path: str) -> dict:
         """
         解析 Excel 文件，生成符合 report_schema.md 的中间态数据
-        
+
         Args:
             excel_path: Excel 文件路径
-            
+
         Returns:
             符合 report_schema.md 规范的字典数据
         """
+        # 使用 ExcelReader 读取数据
+        reader = ExcelReader(excel_path)
+        reader.validate_file()
+
         excel_file = Path(excel_path)
-        if not excel_file.exists():
-            raise FileNotFoundError(f"Excel 文件不存在: {excel_path}")
-        
-        # 使用 openpyxl 获取所有 Sheet 名称
-        workbook = load_workbook(excel_file, read_only=True, data_only=True)
-        available_sheets = workbook.sheetnames
-        workbook.close()
-        
+        available_sheets = reader.get_sheet_names()
+
         # 【实施总表】解析第一个 Sheet 作为 implementation_summary
         # 策略：first_sheet=固定第一个 Sheet；name_match=按名称匹配
         implementation_summary = self._parse_implementation_summary(
@@ -214,7 +222,10 @@ class ExcelParser:
             'implementation_summary': implementation_summary,
             'sections': sections
         }
-        
+
+        # 提取变更摘要（变更应用、变更原因、变更影响）
+        self._extract_summary(result)
+
         return result
     
     def _parse_implementation_summary(
@@ -263,10 +274,12 @@ class ExcelParser:
         
         if not target_sheet:
             return empty_result
-        
+
         try:
-            df = pd.read_excel(excel_file, sheet_name=target_sheet, header=0)
-            
+            # 使用 ExcelReader 读取并清洗数据
+            reader = ExcelReader(str(excel_file))
+            df = reader.read_sheet(target_sheet, header=0)
+
             if df.empty:
                 return {
                     'sheet_name': target_sheet,
@@ -274,8 +287,6 @@ class ExcelParser:
                     'rows': [],
                     'has_data': False
                 }
-            
-            df = self._clean_dataframe(df)
             
             if df.empty:
                 return {
@@ -361,24 +372,22 @@ class ExcelParser:
     def _parse_sheet(self, excel_file: Path, sheet_name: str) -> Optional[dict]:
         """
         解析单个 Sheet
-        
+
         Args:
             excel_file: Excel 文件路径对象
             sheet_name: Sheet 名称
-            
+
         Returns:
             章节数据字典，或 None（如果 Sheet 为空）
         """
         try:
-            # 读取 Sheet 数据
-            df = pd.read_excel(excel_file, sheet_name=sheet_name, header=0)
-            
+            # 使用 ExcelReader 读取并清洗数据
+            reader = ExcelReader(str(excel_file))
+            df = reader.read_sheet(sheet_name, header=0)
+
             # 空数据处理
             if df.empty:
                 return None
-            
-            # 清洗数据：处理空值和非法字符
-            df = self._clean_dataframe(df)
             
             # 动态表头解析：建立列名到核心字段的映射
             field_mapping = self._build_field_mapping(df.columns.tolist())
@@ -479,26 +488,16 @@ class ExcelParser:
     def _clean_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         清洗 DataFrame：处理空值和非法字符
-        
+
+        委托给 ExcelReader.clean_dataframe 实现。
+
         Args:
             df: 原始 DataFrame
-            
+
         Returns:
             清洗后的 DataFrame
         """
-        # 清理列名中的空白字符
-        df.columns = df.columns.map(lambda x: str(x).strip() if pd.notna(x) else '')
-        
-        # 移除完全空白的行
-        df = df.dropna(how='all')
-        
-        # 移除所有列都为空字符串的行
-        df = df.loc[~(df == '').all(axis=1)]
-        
-        # 重置索引
-        df = df.reset_index(drop=True)
-        
-        return df
+        return ExcelReader.clean_dataframe(df)
     
     def _build_field_mapping(self, columns: list[str]) -> dict[str, Optional[str]]:
         """
@@ -774,7 +773,60 @@ class ExcelParser:
                 value = raw_data.get(std_col, '')
             cells.append(str(value) if value else '')
         return cells
-    
+
+    def _get_llm_client(self):
+        """
+        获取 LLM 客户端
+
+        注意：LLM 客户端应由外部注入，此方法仅返回已注入的客户端。
+        如果未注入但配置启用了 LLM，会打印警告。
+
+        Returns:
+            LLM 客户端实例，或 None
+        """
+        if self._llm_client is not None:
+            return self._llm_client
+
+        # 检查配置是否启用 LLM
+        llm_config = self._summary_extraction_config.get('llm_summary', {})
+        if llm_config.get('enabled', False):
+            print(f"警告: LLM 摘要功能已启用，但未注入 LLM 客户端。请在初始化 ExcelParser 时传入 llm_client 参数。")
+
+        return None
+
+    def _extract_summary(self, result: dict) -> None:
+        """
+        提取变更摘要并更新 meta 字段
+
+        在解析完成后调用，生成：
+        - application_name: 变更涉及的应用名称
+        - change_reason: 变更原因和目的
+        - change_impact: 变更影响范围
+
+        Args:
+            result: 解析结果字典（会被修改）
+        """
+        llm_config = self._summary_extraction_config.get('llm_summary', {})
+        llm_client = None
+        if llm_config.get('enabled', False):
+            llm_client = self._get_llm_client()
+
+        summary_generator = SummaryGenerator(
+            llm_client=llm_client,
+            config=self._summary_extraction_config
+        )
+
+        summary = summary_generator.generate({
+            'sections': result.get('sections', []),
+            'implementation_summary': result.get('implementation_summary', {}),
+            'summary': result.get('summary', {})
+        })
+
+        # 更新 meta 字段
+        result['meta']['application_name'] = summary.get('application_name', '')
+        result['meta']['change_reason'] = summary.get('change_reason', '')
+        result['meta']['change_impact'] = summary.get('change_impact', '')
+
     def get_columns_for_sheet(self, sheet_name: str) -> list[str]:
         """
         获取指定 Sheet 应展示的列名（公开接口）

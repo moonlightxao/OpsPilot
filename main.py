@@ -14,9 +14,34 @@ Usage:
 import json
 import sys
 import click
+import yaml
 from pathlib import Path
 
 from src.parser import ExcelParser
+
+
+def _create_llm_client_from_config(config_path: str):
+    """
+    根据配置文件创建 LLM 客户端（如果配置启用）
+
+    Args:
+        config_path: 规则配置文件路径
+
+    Returns:
+        LLM 客户端实例，或 None
+    """
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        llm_config = config.get('summary_extraction', {}).get('llm_summary', {})
+        if llm_config.get('enabled', False):
+            from src.llm import create_llm_client
+            return create_llm_client(llm_config)
+    except Exception as e:
+        print(f"警告: 创建 LLM 客户端失败: {e}")
+
+    return None
 
 
 def safe_echo(message: str, err: bool = False) -> None:
@@ -66,8 +91,11 @@ def analyze(excel_file: str, output: str, config: str):
     click.echo(f"[Analyze] 正在解析: {excel_file}")
 
     try:
+        # 创建 LLM 客户端（如果配置启用）
+        llm_client = _create_llm_client_from_config(config)
+
         # 调用 Parser 模块
-        parser = ExcelParser(config_path=config)
+        parser = ExcelParser(config_path=config, llm_client=llm_client)
         report = parser.parse(excel_file)
 
         # 确保输出目录存在
@@ -154,9 +182,12 @@ def run(excel_file: str, output: str, config: str, force: bool):
     click.echo(f"[Run] 完整流程启动: {excel_file}")
 
     try:
+        # 创建 LLM 客户端（如果配置启用）
+        llm_client = _create_llm_client_from_config(config)
+
         # 阶段 1: 分析
         click.echo("[Run] 阶段 1/2: 分析中...")
-        parser = ExcelParser(config_path=config)
+        parser = ExcelParser(config_path=config, llm_client=llm_client)
         report = parser.parse(excel_file)
 
         # 检查高危操作
