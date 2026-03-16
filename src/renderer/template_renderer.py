@@ -550,55 +550,55 @@ class TemplateRenderer:
         self._render_task_table(doc, columns, rows)
     
     def _render_task_table(
-        self, 
-        doc: Document, 
-        columns: list, 
+        self,
+        doc: Document,
+        columns: list,
         tasks: list
     ) -> None:
-        """渲染任务清单表格"""
+        """渲染任务清单表格
+
+        格式规范：
+        - 所有单元格左对齐
+        - 单元格内自动换行
+        - 中文使用微软雅黑，英文使用 Times New Roman
+        """
         table = doc.add_table(rows=1, cols=len(columns))
         table.style = 'Table Grid'
-        table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        
+
         # 表头样式
         table_header_style = self._output_config.get('table_header_style', {})
         header_cells = table.rows[0].cells
-        
+
         for i, col_name in enumerate(columns):
             cell = header_cells[i]
             cell.text = col_name
-            
+
             for paragraph in cell.paragraphs:
-                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT  # 左对齐
+                paragraph.paragraph_format.word_wrap = True    # 自动换行
                 for run in paragraph.runs:
                     run.font.bold = table_header_style.get('bold', True)
-                    run.font.name = table_header_style.get('font_name', '微软雅黑')
-                    run._element.rPr.rFonts.set(
-                        qn('w:eastAsia'),
-                        table_header_style.get('font_name', '微软雅黑')
-                    )
-            
+                    run.font.name = 'Times New Roman'          # 英文字体
+                    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')  # 中文字体
+
             bg_color = table_header_style.get('background_color', '#D9E2F3')
             self._set_cell_shading(cell, bg_color)
-        
+
         # 数据行
-        body_style = self._output_config.get('body_style', {})
-        
         for task in tasks:
             cells = task.get('cells', [])
             row_cells = table.add_row().cells
-            
+
             for i in range(min(len(cells), len(columns))):
                 cell = row_cells[i]
                 cell.text = str(cells[i]) if cells[i] else ''
-                
+
                 for paragraph in cell.paragraphs:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT  # 左对齐
+                    paragraph.paragraph_format.word_wrap = True    # 自动换行
                     for run in paragraph.runs:
-                        run.font.name = body_style.get('font_name', '宋体')
-                        run._element.rPr.rFonts.set(
-                            qn('w:eastAsia'),
-                            body_style.get('font_name', '宋体')
-                        )
+                        run.font.name = 'Times New Roman'          # 英文字体
+                        run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')  # 中文字体
     
     def _set_cell_shading(self, cell, color: str) -> None:
         """设置单元格背景色"""
