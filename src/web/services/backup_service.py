@@ -5,9 +5,26 @@
 """
 
 import shutil
+from functools import wraps
 from pathlib import Path
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+
+
+def with_backup(f):
+    """
+    装饰器：在执行写操作前自动创建配置备份
+
+    用法：
+        @with_backup
+        def save_config():
+            ...
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        BackupService().create_backup()
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 class BackupService:
