@@ -426,13 +426,13 @@ class TemplateRenderer:
         渲染带分组支持的 sections。
 
         有括号的 Sheet：
-          - 二级标题（Heading 2）：group_name
-          - 三级标题（Heading 3）：sub_title
-          - 表格在三级标题下
+          - 三级标题（Heading 3）：group_name
+          - 四级标题（Heading 4）：sub_title
+          - 表格在四级标题下
 
         无括号的 Sheet：
-          - 二级标题（Heading 2）：section_name（与 group_name 同级）
-          - 表格直接在二级标题下
+          - 三级标题（Heading 3）：section_name（与 group_name 同级）
+          - 表格直接在三级标题下
 
         Args:
             doc: Document 对象
@@ -459,28 +459,28 @@ class TemplateRenderer:
 
             if has_sub_sections:
                 group_idx += 1
-                # 渲染二级标题（group_name）
+                # 渲染三级标题（group_name）
                 heading_text = f"2.1.{group_idx} {group_name}"
-                heading = doc.add_heading(heading_text, level=2)
+                heading = doc.add_heading(heading_text, level=3)
                 for run in heading.runs:
                     run.italic = False
 
-                # 渲染每个子 section（三级标题）
+                # 渲染每个子 section（四级标题）
                 for sub_idx, section in enumerate(group_sections, start=1):
                     sub_title = section.get('sub_title', '')
                     if sub_title:
-                        # 三级标题
+                        # 四级标题
                         sub_heading_text = f"2.1.{group_idx}.{sub_idx} {sub_title}"
-                        doc.add_heading(sub_heading_text, level=3)
+                        doc.add_heading(sub_heading_text, level=4)
 
                     # 渲染该 Sheet 的所有 action_groups
                     self._render_action_groups_for_section(doc, section)
             else:
-                # 无分组，使用二级标题（与 group_name 同级）
+                # 无分组，使用三级标题（与 group_name 同级）
                 group_idx += 1
                 section = group_sections[0]
                 heading_text = f"2.1.{group_idx} {section.get('section_name', '未知章节')}"
-                heading = doc.add_heading(heading_text, level=2)
+                heading = doc.add_heading(heading_text, level=3)
                 for run in heading.runs:
                     run.italic = False
 
