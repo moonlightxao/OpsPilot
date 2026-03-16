@@ -90,7 +90,7 @@ python main.py run <excel_file> --force
 # 启动 Web 配置中心
 python main.py web
 
-# 访问 http://127.0.0.1:5000 进行可视化配置
+# 访问 http://127.0.0.1:8080 进行可视化配置
 ```
 
 ## 命令说明
@@ -171,10 +171,10 @@ OpsPilot/
 │   └── 实施文档.docx           # 生成的文档
 ├── tests/                      # 测试用例
 └── docs/
+    ├── OpsPilot-项目介绍.md    # 项目介绍
     ├── OpsPilot_PRD.md         # 产品需求文档
-    ├── PROJECT_PROGRESS.md     # 项目进度
+    ├── PROJECT_PROGRESS.md     # 项目进展
     ├── report_schema.md        # report.json 协议
-    ├── TECH_DESIGN_*.md        # 技术方案文档
     └── Sample_Files/           # 样例文件
 ```
 
@@ -189,7 +189,7 @@ OpsPilot/
 python main.py web
 
 # 浏览器访问
-http://127.0.0.1:5000
+http://127.0.0.1:8080
 ```
 
 ### 配置存储
@@ -253,6 +253,62 @@ http://127.0.0.1:5000
 | `high_risk_keywords` | 定义需要人工确认的高危操作关键字 |
 | `sheet_column_mapping` | 定义不同 Sheet 类型在 Word 表格中的列展示 |
 | `core_fields` | 定义核心字段的别名映射（用于解析器识别） |
+
+## LLM 配置指南
+
+OpsPilot 支持 OpenAI、Anthropic、Ollama 三种 LLM 后端，用于智能风险识别和摘要生成。
+
+### 环境变量配置（推荐）
+
+在系统环境变量中设置 API 密钥：
+
+| 提供商 | 环境变量 | 说明 |
+|--------|----------|------|
+| OpenAI | `OPENAI_API_KEY` | API 密钥（必需） |
+| OpenAI | `OPENAI_BASE_URL` | API 基础 URL（可选，用于代理） |
+| Anthropic | `ANTHROPIC_API_KEY` | API 密钥（必需） |
+| Ollama | `OLLAMA_BASE_URL` | 服务地址，默认 `http://localhost:11434` |
+
+**Linux/macOS**：
+```bash
+export OPENAI_API_KEY=sk-xxx
+export ANTHROPIC_API_KEY=sk-xxx
+```
+
+**Windows PowerShell**：
+```powershell
+$env:OPENAI_API_KEY="sk-xxx"
+$env:ANTHROPIC_API_KEY="sk-xxx"
+```
+
+### rules.yaml 配置
+
+在 `config/rules.yaml` 中配置 LLM 功能：
+
+```yaml
+# 风险检测 LLM 配置
+risk_detection:
+  enabled: true
+  llm:
+    enabled: true
+    provider: "openai"      # openai / anthropic / ollama
+    model: "gpt-4o-mini"
+    api_key: null           # 可选，优先级高于环境变量
+    base_url: null          # 可选
+
+# 摘要生成 LLM 配置
+summary_extraction:
+  llm_summary:
+    enabled: true
+    provider: "anthropic"
+    model: "claude-sonnet-4-6"
+```
+
+### 配置优先级
+
+1. `rules.yaml` 中的 `api_key` / `base_url`（最高优先级）
+2. 系统环境变量
+3. 默认值（仅 Ollama 有默认 base_url）
 
 ## 实验性功能
 
