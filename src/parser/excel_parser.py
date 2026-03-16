@@ -99,7 +99,10 @@ class ExcelParser:
         self._high_risk_keywords: list = []
         self._sheet_column_mapping: dict = {}
         self._default_columns: list = []
-        
+
+        # Sheet 分组正则：匹配 Name(subtitle) 格式
+        self._parenthesis_pattern = re.compile(r'^(.+?)\(([^)]+)\)$')
+
         self._load_config()
     
     def _load_config(self) -> None:
@@ -118,6 +121,29 @@ class ExcelParser:
         self._sheet_column_mapping = self._config.get('sheet_column_mapping', {})
         self._default_columns = self._config.get('default_columns', [])
         self._implementation_summary_config = self._config.get('implementation_summary', {})
+
+    def _parse_sheet_name_for_grouping(self, sheet_name: str) -> tuple[str, Optional[str]]:
+        """
+        解析 Sheet 名称，提取分组名和子标题。
+
+        Args:
+            sheet_name: 原始 Sheet 名称
+
+        Returns:
+            (group_name, sub_title) - 无括号时 sub_title 为 None
+
+        Examples:
+            >>> _parse_sheet_name_for_grouping('HIS-A-B(test1)')
+            ('HIS-A-B', 'test1')
+            >>> _parse_sheet_name_for_grouping('HIS-A-B')
+            ('HIS-A-B', None)
+        """
+        match = self._parenthesis_pattern.match(sheet_name)
+        if match:
+            group_name = match.group(1).strip()
+            sub_title = match.group(2)  # 保留原始格式，不做 strip
+            return group_name, sub_title
+        return sheet_name, None
     
     def get_sheets(self) -> list[str]:
         """
@@ -173,8 +199,30 @@ class ExcelParser:
             sheet for sheet in available_sheets
             if "HIS" in sheet.upper() and sheet != impl_summary_sheet_name
         ]
-        # priority_rules 用于排序，未定义的 sheet 排在最后
-        sheets_to_process.sort(key=lambda x: self._priority_rules.get(x, 999))
+
+        # 构建 Sheet 名称到原始索引的映射（保持同一分组内按 Excel 原始顺序）
+        sheet_order = {name: idx for idx, name in enumerate(available_sheets)
+                       if "HIS" in name.upper() and name != impl_summary_sheet_name}
+
+        # 计算每个分组的最小优先级（用于分组间排序）
+        group_priorities: dict[str, int] = {}
+        for sheet_name in sheets_to_process:
+            group_name, _ = self._parse_sheet_name_for_grouping(sheet_name)
+            priority = self._priority_rules.get(sheet_name, 999)
+            if group_name not in group_priorities:
+                group_priorities[group_name] = priority
+            else:
+                group_priorities[group_name] = min(group_priorities[group_name], priority)
+
+        def sort_key(sheet_name):
+            group_name, sub_title = self._parse_sheet_name_for_grouping(sheet_name)
+            group_priority = group_priorities.get(group_name, 999)
+            sheet_priority = self._priority_rules.get(sheet_name, 999)
+            original_order = sheet_order.get(sheet_name, 999)
+            # 分组间按组最小优先级排序，分组内按 Sheet 优先级和原始顺序排序
+            return (group_priority, group_name, sheet_priority, original_order)
+
+        sheets_to_process.sort(key=sort_key)
         
         for sheet_name in sheets_to_process:
             section_data = self._parse_sheet(excel_file, sheet_name)
@@ -446,9 +494,14 @@ class ExcelParser:
             
             # 获取章节优先级
             priority = self._priority_rules.get(sheet_name, 999)
-            
+
+            # 解析 Sheet 名称，提取分组信息
+            group_name, sub_title = self._parse_sheet_name_for_grouping(sheet_name)
+
             return {
                 'section_name': sheet_name,
+                'group_name': group_name,      # 分组名称（括号外内容）
+                'sub_title': sub_title,        # 子标题（括号内内容，无括号时为 None）
                 'priority': priority,
                 'has_action_groups': len(formatted_action_groups) > 0,
                 'columns': columns,

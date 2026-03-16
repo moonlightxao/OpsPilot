@@ -262,10 +262,27 @@ class TemplateRenderer:
         # 2.1 详细实施步骤
         doc.add_heading('2.1 详细实施步骤', level=3)
         sections = report.get('sections', [])
-        sections_sorted = sorted(sections, key=lambda x: x.get('priority', 999))
 
-        for idx, section in enumerate(sections_sorted, start=1):
-            self._render_section(doc, section, idx)
+        # 计算每个分组的最小优先级（用于分组间排序）
+        group_priorities: dict[str, int] = {}
+        for section in sections:
+            group_name = section.get('group_name', section.get('section_name', ''))
+            priority = section.get('priority', 999)
+            if group_name not in group_priorities:
+                group_priorities[group_name] = priority
+            else:
+                group_priorities[group_name] = min(group_priorities[group_name], priority)
+
+        def sort_key(s):
+            group_name = s.get('group_name', s.get('section_name', ''))
+            group_priority = group_priorities.get(group_name, 999)
+            sheet_priority = s.get('priority', 999)
+            return (group_priority, group_name, sheet_priority)
+
+        sections_sorted = sorted(sections, key=sort_key)
+
+        # 使用分组渲染
+        self._render_sections_grouped(doc, sections_sorted)
         
         # ===== 第3部分：实施后验证计划 =====
         doc.add_heading('3 实施后验证计划', level=1)
@@ -398,10 +415,87 @@ class TemplateRenderer:
 
         action_groups = section.get('action_groups', [])
         columns = section.get('columns', [])
-        
+
         for i, action_group in enumerate(action_groups):
             if i > 0:
                 doc.add_paragraph()
+            self._render_action_group(doc, columns, action_group)
+
+    def _render_sections_grouped(self, doc: Document, sections: list) -> None:
+        """
+        渲染带分组支持的 sections。
+
+        有括号的 Sheet：
+          - 二级标题（Heading 2）：group_name
+          - 三级标题（Heading 3）：sub_title
+          - 表格在三级标题下
+
+        无括号的 Sheet：
+          - 保持现有 Heading 4 渲染逻辑
+
+        Args:
+            doc: Document 对象
+            sections: 已排序的 sections 列表
+        """
+        from itertools import groupby
+
+        # 按 group_name 分组
+        groups: dict[str, list] = {}
+        for section in sections:
+            group_name = section.get('group_name', section.get('section_name', ''))
+            if group_name not in groups:
+                groups[group_name] = []
+            groups[group_name].append(section)
+
+        group_idx = 0
+        for group_name, group_sections in groups.items():
+            # 判断是否为分组模式（任一 section 有 sub_title）
+            has_sub_sections = any(s.get('sub_title') for s in group_sections)
+
+            if has_sub_sections:
+                group_idx += 1
+                # 渲染二级标题
+                heading_text = f"2.1.{group_idx} {group_name}"
+                heading = doc.add_heading(heading_text, level=2)
+                # 移除斜体（Heading 2 默认可能是斜体）
+                for run in heading.runs:
+                    run.italic = False
+
+                # 渲染每个子 section（三级标题）
+                for sub_idx, section in enumerate(group_sections, start=1):
+                    sub_title = section.get('sub_title', '')
+                    if sub_title:
+                        # 三级标题
+                        sub_heading_text = f"2.1.{group_idx}.{sub_idx} {sub_title}"
+                        doc.add_heading(sub_heading_text, level=3)
+
+                    # 渲染该 Sheet 的所有 action_groups
+                    self._render_action_groups_for_section(doc, section)
+            else:
+                # 无分组，使用现有逻辑
+                group_idx += 1
+                section = group_sections[0]
+                heading_text = f"2.1.{group_idx} {section.get('section_name', '未知章节')}"
+                heading = doc.add_heading(heading_text, level=4)
+                # 移除斜体
+                for run in heading.runs:
+                    run.italic = False
+
+                self._render_action_groups_for_section(doc, section)
+
+    def _render_action_groups_for_section(self, doc: Document, section: dict) -> None:
+        """渲染单个 section 的所有 action_groups
+
+        Args:
+            doc: Document 对象
+            section: 章节数据
+        """
+        columns = section.get('columns', [])
+        action_groups = section.get('action_groups', [])
+
+        for i, action_group in enumerate(action_groups):
+            if i > 0:
+                doc.add_paragraph()  # 操作组之间加空行
             self._render_action_group(doc, columns, action_group)
     
     def _render_action_group(

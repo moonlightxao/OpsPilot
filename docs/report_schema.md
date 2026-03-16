@@ -47,6 +47,8 @@
   "sections": [
     {
       "section_name": "string - 章节/Sheet 名称",
+      "group_name": "string - 分组名称（括号外内容），无括号时等于 section_name",
+      "sub_title": "string - 子标题（括号内内容），无括号时为 null",
       "priority": "integer - 章节优先级",
       "has_action_groups": "boolean - 是否有操作组",
       "columns": ["string - 该章节表格的列名列表"],
@@ -215,6 +217,8 @@
 | `implementation_summary.has_data` | Y | 是否有实施总表数据，用于模板条件渲染 |
 | `summary.has_external_links` | Y | 用于模板条件渲染外部链接区块 |
 | `has_risk_alerts` | Y | 用于模板条件渲染风险告警区块 |
+| `sections[].group_name` | N | 分组名称（括号外内容），无括号时等于 section_name |
+| `sections[].sub_title` | N | 子标题（括号内内容），无括号时为 null |
 | `sections[].columns` | Y | 该章节表格的列名，用于表头渲染 |
 | `sections[].has_action_groups` | Y | 用于模板条件判断 |
 | `action_groups[].task_count` | Y | 任务数量，便于统计显示 |
