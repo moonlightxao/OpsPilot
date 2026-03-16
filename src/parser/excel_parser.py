@@ -226,7 +226,10 @@ class ExcelParser:
         
         for sheet_name in sheets_to_process:
             section_data = self._parse_sheet(excel_file, sheet_name)
-            
+
+            # 过滤只有列头的空 Sheet（无实际任务数据）
+            if section_data and section_data.get('task_count', 0) == 0:
+                continue
             if section_data:
                 sections.append(section_data)
                 total_tasks += section_data.get('task_count', 0)
