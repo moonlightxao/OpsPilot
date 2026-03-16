@@ -71,8 +71,8 @@ class TestExcelParserParse:
         
         # 验证 Section 名称
         section_names = [s['section_name'] for s in result['sections']]
-        assert '数据库脚本部署' in section_names
-        assert '上线代码包清单' in section_names
+        assert 'HIS-数据库脚本部署' in section_names
+        assert 'HIS-上线代码包清单' in section_names
     
     def test_parse_task_count(self, sample_config, sample_excel):
         """测试任务计数正确"""
@@ -99,13 +99,13 @@ class TestExcelParserParse:
             parser.parse(str(temp_dir / "not_exist.xlsx"))
     
     def test_implementation_summary_from_first_sheet(self, sample_config, sample_excel):
-        """测试第一个 Sheet 解析为 implementation_summary（6 列映射、序号自动生成）"""
+        """测试「变更安排」Sheet 解析为 implementation_summary（6 列映射、序号自动生成）"""
         parser = ExcelParser(config_path=str(sample_config))
         result = parser.parse(str(sample_excel))
 
         impl = result.get('implementation_summary', {})
         assert impl.get('has_data') is True
-        assert impl.get('sheet_name') == '上线安排'
+        assert impl.get('sheet_name') == '变更安排'
         assert impl.get('columns') == ['序号', '任务', '开始时间', '结束时间', '实施人', '复核人']
         assert 'rows' in impl
         assert len(impl['rows']) >= 1
@@ -334,15 +334,15 @@ class TestExcelParserActionGroups:
         """测试相同操作类型聚合"""
         parser = ExcelParser(config_path=str(sample_config))
         result = parser.parse(str(sample_excel))
-        
+
         # 找到数据库脚本部署章节
         db_section = next(
-            (s for s in result['sections'] if s['section_name'] == '数据库脚本部署'),
+            (s for s in result['sections'] if s['section_name'] == 'HIS-数据库脚本部署'),
             None
         )
-        
+
         assert db_section is not None
-        
+
         # 验证 action_groups
         action_types = [g['action_type'] for g in db_section['action_groups']]
         assert '新增' in action_types
@@ -378,15 +378,15 @@ class TestExcelParserGetSheets:
         """测试返回按优先级排序的 Sheet 列表"""
         parser = ExcelParser(config_path=str(sample_config))
         sheets = parser.get_sheets()
-        
+
         # 验证返回的 sheets
-        assert '数据库脚本部署' in sheets
-        assert '上线代码包清单' in sheets
-        assert '应用配置' in sheets
-        
-        # 验证顺序：数据库脚本部署(10) < 上线代码包清单(15) < 应用配置(20)
-        assert sheets.index('数据库脚本部署') < sheets.index('上线代码包清单')
-        assert sheets.index('上线代码包清单') < sheets.index('应用配置')
+        assert 'HIS-数据库脚本部署' in sheets
+        assert 'HIS-上线代码包清单' in sheets
+        assert 'HIS-应用配置' in sheets
+
+        # 验证顺序：HIS-数据库脚本部署(10) < HIS-上线代码包清单(15) < HIS-应用配置(20)
+        assert sheets.index('HIS-数据库脚本部署') < sheets.index('HIS-上线代码包清单')
+        assert sheets.index('HIS-上线代码包清单') < sheets.index('HIS-应用配置')
 
 
 class TestExcelParserGetColumns:
@@ -395,8 +395,8 @@ class TestExcelParserGetColumns:
     def test_get_columns_for_known_sheet(self, sample_config):
         """测试获取已知 Sheet 的列配置"""
         parser = ExcelParser(config_path=str(sample_config))
-        
-        columns = parser.get_columns_for_sheet('数据库脚本部署')
+
+        columns = parser.get_columns_for_sheet('HIS-数据库脚本部署')
         assert '脚本名称' in columns
         assert '执行顺序' in columns
     

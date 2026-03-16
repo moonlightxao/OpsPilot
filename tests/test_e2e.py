@@ -144,9 +144,9 @@ class TestEndToEnd:
         parser = ExcelParser(config_path=str(sample_config))
         report = parser.parse(str(sample_excel))
         
-        # 验证任务数量（Sheet 2 数据库脚本部署 3 + Sheet 3 上线代码包清单 2）
+        # 验证任务数量（HIS-数据库脚本部署 3 + HIS-上线代码包清单 2）
         assert report['summary']['total_tasks'] == 5
-        
+
         # 收集所有任务名（v2.0 协议：从 cells 数组中提取）
         excel_tasks = set()
         for section in report['sections']:
@@ -156,11 +156,11 @@ class TestEndToEnd:
                     cells = task.get('cells', [])
                     if cells:
                         excel_tasks.add(cells[0])
-        
+
         assert '创建用户表' in excel_tasks
         assert '添加索引' in excel_tasks
         assert '删除临时表' in excel_tasks
-        # 上线代码包清单的 cells[0] 是包名
+        # HIS-上线代码包清单的 cells[0] 是包名
         assert 'service-a-v1.0.0.jar' in excel_tasks
         assert 'service-b-v2.0.0.jar' in excel_tasks
         
@@ -206,10 +206,10 @@ class TestEndToEnd:
         doc = Document(str(output_docx))
         text = '\n'.join([p.text for p in doc.paragraphs])
         
-        # 数据库脚本部署(10) 应该在 上线代码包(15) 之前
+        # HIS-数据库脚本部署(10) 应该在 HIS-上线代码包(15) 之前
         db_pos = text.find('数据库脚本部署')
         code_pos = text.find('上线代码包')
-        
+
         assert db_pos < code_pos, "章节优先级顺序错误"
 
 
