@@ -431,7 +431,8 @@ class TemplateRenderer:
           - 表格在三级标题下
 
         无括号的 Sheet：
-          - 保持现有 Heading 4 渲染逻辑
+          - 二级标题（Heading 2）：section_name（与 group_name 同级）
+          - 表格直接在二级标题下
 
         Args:
             doc: Document 对象
@@ -439,25 +440,28 @@ class TemplateRenderer:
         """
         from itertools import groupby
 
-        # 按 group_name 分组
+        # 按 group_name 分组，保持原始顺序
         groups: dict[str, list] = {}
+        group_order: list[str] = []  # 记录组的出现顺序
+
         for section in sections:
             group_name = section.get('group_name', section.get('section_name', ''))
             if group_name not in groups:
                 groups[group_name] = []
+                group_order.append(group_name)
             groups[group_name].append(section)
 
         group_idx = 0
-        for group_name, group_sections in groups.items():
+        for group_name in group_order:
+            group_sections = groups[group_name]
             # 判断是否为分组模式（任一 section 有 sub_title）
             has_sub_sections = any(s.get('sub_title') for s in group_sections)
 
             if has_sub_sections:
                 group_idx += 1
-                # 渲染二级标题
+                # 渲染二级标题（group_name）
                 heading_text = f"2.1.{group_idx} {group_name}"
                 heading = doc.add_heading(heading_text, level=2)
-                # 移除斜体（Heading 2 默认可能是斜体）
                 for run in heading.runs:
                     run.italic = False
 
@@ -472,11 +476,15 @@ class TemplateRenderer:
                     # 渲染该 Sheet 的所有 action_groups
                     self._render_action_groups_for_section(doc, section)
             else:
-                # 无分组，使用现有逻辑
+                # 无分组，使用二级标题（与 group_name 同级）
                 group_idx += 1
                 section = group_sections[0]
                 heading_text = f"2.1.{group_idx} {section.get('section_name', '未知章节')}"
-                heading = doc.add_heading(heading_text, level=4)
+                heading = doc.add_heading(heading_text, level=2)
+                for run in heading.runs:
+                    run.italic = False
+
+                self._render_action_groups_for_section(doc, section)
                 # 移除斜体
                 for run in heading.runs:
                     run.italic = False
