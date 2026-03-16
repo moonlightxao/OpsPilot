@@ -260,7 +260,7 @@ class TemplateRenderer:
             doc.add_paragraph()
         
         # 2.1 详细实施步骤
-        doc.add_heading('2.1 详细实施步骤', level=3)
+        doc.add_heading('2.1 详细实施步骤', level=2)
         sections = report.get('sections', [])
 
         # 计算每个分组的最小优先级（用于分组间排序）
