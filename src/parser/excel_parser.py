@@ -152,8 +152,7 @@ class ExcelParser:
         available_sheets = workbook.sheetnames
         workbook.close()
         
-        # 【实施总表】解析第一个 Sheet 作为 implementation_summary
-        # 策略：first_sheet=固定第一个 Sheet；name_match=按名称匹配
+        # 【实施总表】从「变更安排」Sheet 解析 implementation_summary
         implementation_summary = self._parse_implementation_summary(
             excel_file, available_sheets
         )
@@ -168,11 +167,13 @@ class ExcelParser:
         total_tasks = 0
         high_risk_count = 0
         
-        # 按优先级顺序处理每个 Sheet，排除已作为实施总表的 Sheet
+        # 过滤规则：只处理名称包含 "HIS"（忽略大小写）的 sheet
+        # 「变更安排」已作为实施总表处理，不进入 sections
         sheets_to_process = [
-            sheet for sheet in self._priority_rules.keys()
-            if sheet in available_sheets and sheet != impl_summary_sheet_name
+            sheet for sheet in available_sheets
+            if "HIS" in sheet.upper() and sheet != impl_summary_sheet_name
         ]
+        # priority_rules 用于排序，未定义的 sheet 排在最后
         sheets_to_process.sort(key=lambda x: self._priority_rules.get(x, 999))
         
         for sheet_name in sheets_to_process:
@@ -221,29 +222,25 @@ class ExcelParser:
         self, excel_file: Path, available_sheets: list[str]
     ) -> dict:
         """
-        解析实施总表（Excel 第一个 Sheet 或按名称匹配的 Sheet）
-        
+        解析实施总表（固定从「变更安排」Sheet 获取）
+
         按 rules 中 implementation_summary 配置：
         - 过滤 Unnamed、空列名
         - 列映射到 output_columns
         - 日期列做 Excel 序列号 → YYYY-MM-DD 转换
         - 无序号列时自动生成 1,2,3...
-        
+
         Returns:
             implementation_summary 字典，columns 固定为 output_columns 顺序
+
+        Raises:
+            ValueError: 当「变更安排」Sheet 不存在时抛出
         """
-        empty_result = {
-            'sheet_name': '',
-            'columns': [],
-            'rows': [],
-            'has_data': False
-        }
-        
-        if not available_sheets:
-            return empty_result
-        
-        strategy = self._implementation_summary_config.get('strategy', 'first_sheet')
-        sheet_names = self._implementation_summary_config.get('sheet_names', [])
+        # 固定从「变更安排」Sheet 获取实施总表
+        target_sheet = "变更安排"
+        if target_sheet not in available_sheets:
+            raise ValueError(f"Excel 文件中缺少必需的 Sheet 页: {target_sheet}")
+
         output_columns = self._implementation_summary_config.get(
             'output_columns', ['序号', '任务', '开始时间', '结束时间', '实施人', '复核人']
         )
@@ -251,18 +248,6 @@ class ExcelParser:
         date_columns = set(self._implementation_summary_config.get('date_columns', ['开始时间', '结束时间']))
         auto_sequence = self._implementation_summary_config.get('auto_sequence', True)
         drop_unnamed = self._implementation_summary_config.get('drop_unnamed_columns', True)
-        
-        target_sheet = None
-        if strategy == 'first_sheet':
-            target_sheet = available_sheets[0]
-        elif strategy == 'name_match' and sheet_names:
-            for name in sheet_names:
-                if name in available_sheets:
-                    target_sheet = name
-                    break
-        
-        if not target_sheet:
-            return empty_result
         
         try:
             df = pd.read_excel(excel_file, sheet_name=target_sheet, header=0)
