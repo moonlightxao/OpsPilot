@@ -2,7 +2,7 @@
 
 自动化部署方案生成工具，通过解析规范化 Excel 清单（上线内容），自动输出符合样式的 Word 实施文档。
 
-**技术选型**：核心转换引擎 Python + pandas，渲染引擎 `docxtpl`（Jinja2），Web 框架 Flask。
+**技术选型**：核心转换引擎 Python + pandas + openpyxl，渲染引擎 `docxtpl`（Jinja2），Web 框架 Flask，MCP 服务 FastMCP。
 
 ## 功能特性
 
@@ -159,9 +159,9 @@ OpsPilot/
 ├── tests/                      # 测试用例
 └── docs/
     ├── OpsPilot_PRD.md         # 产品需求文档
-    ├── PROJECT_PROGRESS.md     # 项目进度
+    ├── ARCHITECTURE_OVERVIEW.md # 架构概览
+    ├── OpsPilot-项目介绍.md     # 项目介绍
     ├── report_schema.md        # report.json 协议
-    ├── TECH_DESIGN_*.md        # 技术方案文档
     └── Sample_Files/           # 样例文件
 ```
 
@@ -270,10 +270,6 @@ Excel → Parser → report.json v2.1 (人工确认) → docxtpl → template.do
   │                                                              ↑
   └────────────── MCP Server (opspilot_analyze/generate) ────────┘
 ```
-
-### 项目进度
-
-任务拆解与架构决策详见 `docs/PROJECT_PROGRESS.md`。
 
 ## 里程碑
 

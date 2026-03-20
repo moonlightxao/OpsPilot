@@ -95,13 +95,6 @@ git commit -m "feat(parser): 新增 Excel 多 Sheet 解析"
 git push origin <branch>
 ```
 
-## 项目进展
-
-项目执行看板位于 `docs/PROJECT_PROGRESS.md`。
-
-- 完成任何任务后必须同步更新此文件
-- 在变更日志中追加记录：`[日期] [角色] 动作 | 产出物`
-
 ## 核心目录结构
 
 ```
@@ -120,7 +113,7 @@ OpsPilot/
 │   └── report.json         # 中间态数据
 ├── docs/
 │   ├── OpsPilot_PRD.md     # 产品需求文档
-│   ├── PROJECT_PROGRESS.md # 项目进展看板
+│   ├── ARCHITECTURE_OVERVIEW.md # 架构概览
 │   └── report_schema.md    # report.json 协议
 └── tests/                  # 测试用例
 ```

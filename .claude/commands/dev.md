@@ -46,8 +46,6 @@ Excel 清单 → Parser 解析 → report.json → Renderer 渲染 → Word 实�
 
 - **协议**：`docs/report_schema.md`（report.json 字段与版本）
 - **架构与接口**：`docs/ARCHITECTURE_OVERVIEW.md`（模块职责、公开 API、测试说明）
-- **Web 方案**：`docs/TECH_DESIGN_WEB_CONFIG.md`（API、目录、数据结构扩展）
-- **进度与任务**：`docs/PROJECT_PROGRESS.md`
 
 ## 常用命令
 
@@ -85,6 +83,6 @@ pytest tests/
 
 ## 项目管理规范
 
-- **原子化同步**：每完成一个独立模块（如 Parser 跑通、Aggregator 逻辑验证）后，必须更新 `PROJECT_PROGRESS.md`
-- **状态透明**：更新进度时，需注明当前模块的实现程度（例如：解析器已支持动态表头）
-- **同步要求**：在切换到下一个开发任务前，确保上一个任务在看板中已标记为完成状态
+- **原子化提交**：每完成一个独立模块后，按 CLAUDE.md 提交规范立即提交并推送
+- **状态透明**：提交信息需注明当前模块的实现程度
+- **同步要求**：在切换到下一个开发任务前，确保上一个任务已提交

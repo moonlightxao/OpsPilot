@@ -152,7 +152,10 @@
 ##### D. 其他配置
 * 实施总表配置（implementation_summary）
 * 输出样式配置（output_config）
-* 渲染策略配置（render_config）
+* 渲染策略配置（render_config）：
+    * **AUTO**（默认）：先尝试模板渲染，失败自动回退内置渲染
+    * **TEMPLATE**：仅使用模板渲染，失败则报错
+    * **BUILTIN**：纯 python-docx 内置渲染，不使用模板
 
 #### 3.4.4 配置保存与回滚
 * **即时生效**：保存时直接写入 `config/rules.yaml`，立即生效
@@ -241,12 +244,6 @@
     * 预置字段的 `required` 属性保持不变
     * 保存成功后显示 Toast 提示"配置已保存，已同步 N 个核心字段"
     * 解析器使用同步后的 core_fields 别名能正确匹配 Excel 列名
-* **操作类型自动识别**（V6 新增）：
-    * 上传包含「操作类型」列的 Excel，系统能正确识别所有去重值
-    * 新操作类型自动保存到对应 Sheet 章节，默认属性正确填充（instruction、is_high_risk、render_table）
-    * 已存在的操作类型显示冲突标记（⚠️），需用户确认覆盖
-    * 用户选择「跳过」的操作类型不被覆盖
-    * 无「操作类型」列的 Sheet 不处理
 * **操作类型自动识别**（V6 新增）：
     * 上传包含「操作类型」列的 Excel，系统能正确识别所有去重值
     * 新操作类型自动保存到对应 Sheet 章节（`action_library.{Sheet名}.{操作类型}`）
