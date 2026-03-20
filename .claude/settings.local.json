@@ -10,7 +10,17 @@
       "Bash(git pull:*)",
       "Bash(PYTHONIOENCODING=utf-8 python:*)",
       "Bash(dir:*)",
-      "Bash(chcp:*)"
+      "Bash(chcp:*)",
+      "Bash(cd D:/code/OpsPilot && pip install requests -q && python -c \"from src.parser.risk_detector import RiskDetector; d = RiskDetector\\(\\); r = d.assess\\('删除配置'\\); print\\(f'风险等级: {r.risk_level}, 分数: {r.risk_score}'\\)\")",
+      "Read(//d/code/pptx-generator-mcp/**)",
+      "Bash(npm install:*)",
+      "Bash(which pptx-generator-mcp:*)",
+      "Bash(claude mcp:*)",
+      "Bash(claude doctor:*)",
+      "mcp__pptx-generator__get_template",
+      "mcp__pptx-generator__get_config",
+      "mcp__pptx-generator__generate_presentation",
+      "Bash(git stash:*)"
     ]
   }
 }
