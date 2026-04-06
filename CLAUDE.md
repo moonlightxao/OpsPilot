@@ -8,7 +8,7 @@ OpsPilot 是一个 Excel 清单到 Word 实施文档的自动化转换工具。
 Excel 清单 → Parser 解析 → report.json → Renderer 渲染 → Word 实施文档
 ```
 
-技术栈：Python 3.x + pandas + python-docx + docxtpl + Click + Flask + FastMCP
+技术栈：Python 3.x + pandas + python-docx + docxtpl + Click + Flask
 
 ## 角色切换命令
 
@@ -62,7 +62,6 @@ Excel 清单 → Parser 解析 → report.json → Renderer 渲染 → Word 实�
 - `core` - 核心逻辑（`src/core/`）
 - `cli` - 命令行接口
 - `web` - Web 配置中心（`src/web/`）
-- `mcp` - MCP 服务（`src/mcp/`）
 
 #### Subject 主题
 
@@ -103,7 +102,6 @@ OpsPilot/
 ├── src/
 │   ├── parser/             # Excel 解析模块
 │   ├── renderer/           # Word 渲染模块
-│   ├── mcp/                # MCP 服务模块
 │   └── web/                # Web 配置中心
 ├── config/
 │   └── rules.yaml          # 业务规则配置（禁止硬编码）
@@ -111,10 +109,6 @@ OpsPilot/
 │   └── template.docx       # Word 模板（Jinja2 占位符）
 ├── output/
 │   └── report.json         # 中间态数据
-├── docs/
-│   ├── OpsPilot_PRD.md     # 产品需求文档
-│   ├── ARCHITECTURE_OVERVIEW.md # 架构概览
-│   └── report_schema.md    # report.json 协议
 └── tests/                  # 测试用例
 ```
 
@@ -132,9 +126,6 @@ python main.py run <excel_file>
 
 # 启动 Web 配置中心
 python main.py web
-
-# MCP 服务
-python -m src.mcp.server
 
 # 测试
 pytest tests/

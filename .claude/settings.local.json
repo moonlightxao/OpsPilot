@@ -21,7 +21,8 @@
       "mcp__pptx-generator__get_config",
       "mcp__pptx-generator__generate_presentation",
       "Bash(git stash:*)",
-      "Bash(wc -l /d/code/OpsPilot/tests/*.py | tail -1)"
+      "Bash(wc -l /d/code/OpsPilot/tests/*.py | tail -1)",
+      "Bash(pytest tests/ -q)"
     ]
   }
 }

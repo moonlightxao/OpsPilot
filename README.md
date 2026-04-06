@@ -2,7 +2,7 @@
 
 自动化部署方案生成工具，通过解析规范化 Excel 清单（上线内容），自动输出符合样式的 Word 实施文档。
 
-**技术选型**：核心转换引擎 Python + pandas + openpyxl，渲染引擎 `docxtpl`（Jinja2），Web 框架 Flask，MCP 服务 FastMCP。
+**技术选型**：核心转换引擎 Python + pandas + openpyxl，渲染引擎 `docxtpl`（Jinja2），Web 框架 Flask。
 
 ## 功能特性
 
@@ -15,7 +15,6 @@
 - **人机协同**：两阶段执行模式，分析结果需人工确认后方可生成文档
 
 ### 扩展功能
-- **MCP 服务化**：支持通过 MCP 协议对外暴露工具，供外部 Agent 调用
 - **Web 配置中心**：可视化界面管理规则配置，支持拖拽排序、富文本编辑、版本回滚
 
 ### Web 配置中心增强功能
@@ -130,9 +129,6 @@ OpsPilot/
 │   ├── renderer/               # 渲染模块
 │   │   ├── __init__.py
 │   │   └── template_renderer.py
-│   ├── mcp/                    # MCP 服务层
-│   │   ├── __init__.py
-│   │   └── server.py
 │   └── web/                    # Web 配置中心
 │       ├── __init__.py
 │       ├── app.py              # Flask 应用工厂
@@ -158,10 +154,6 @@ OpsPilot/
 │   └── 实施文档.docx           # 生成的文档
 ├── tests/                      # 测试用例
 └── docs/
-    ├── OpsPilot_PRD.md         # 产品需求文档
-    ├── ARCHITECTURE_OVERVIEW.md # 架构概览
-    ├── OpsPilot-项目介绍.md     # 项目介绍
-    ├── report_schema.md        # report.json 协议
     └── Sample_Files/           # 样例文件
 ```
 
@@ -203,30 +195,6 @@ http://127.0.0.1:5000
 - **数据迁移**：旧格式 `action_library` 自动迁移为 `{章节名: {操作类型: 配置}}` 格式
 - **配置隔离**：不同章节的操作类型互不影响
 
-## MCP 服务化
-
-外部 Agent 可通过 MCP 协议调用 OpsPilot 能力。在 Cursor 等支持 MCP 的 IDE 中配置：
-
-```json
-{
-  "mcpServers": {
-    "opspilot": {
-      "command": "python",
-      "args": ["-m", "src.mcp.server"],
-      "cwd": "<OpsPilot 项目根目录>"
-    }
-  }
-}
-```
-
-**可用工具**：
-
-| 工具名称 | 功能 |
-|---------|------|
-| `opspilot_analyze` | 解析 Excel，返回 report.json 结构化数据 |
-| `opspilot_generate` | 基于 report 数据生成 Word 实施文档 |
-| `opspilot_run` | 完整流程：解析 + 生成一体化 |
-
 ## 配置说明
 
 业务规则通过 `config/rules.yaml` 配置，包括：
@@ -267,8 +235,6 @@ pytest tests/
 
 ```
 Excel → Parser → report.json v2.1 (人工确认) → docxtpl → template.docx → Word 实施文档
-  │                                                              ↑
-  └────────────── MCP Server (opspilot_analyze/generate) ────────┘
 ```
 
 ## 里程碑
@@ -278,7 +244,6 @@ Excel → Parser → report.json v2.1 (人工确认) → docxtpl → template.do
 | M1 | 跑通数据解析到 JSON 的全流程 | ✅ 完成 |
 | M3 | 产出第一份完全符合样式的 Word 实施方案 | ✅ 完成 |
 | M4 | 模板填充方案验证通过 | ✅ 完成 |
-| M5 | MCP 服务上线，外部 Agent 可调用 | ✅ 完成 |
 | M6 | Web 配置中心上线，可视化配置管理 | ✅ 完成 |
 | M7 | 操作类型章节绑定 + 批量删除 + 核心字段同步 | ✅ 完成 |
 | V5 | Excel 一键保存全量覆盖模式，解决配置累积问题 | ✅ 完成 |
@@ -293,7 +258,6 @@ python-docx>=1.0.0
 docxtpl>=0.17.0
 click>=8.1.0
 pyyaml>=6.0
-fastmcp>=0.1.0
 flask>=3.0.0
 werkzeug>=3.0.0
 pytest>=7.0.0

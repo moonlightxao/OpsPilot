@@ -8,7 +8,7 @@
 Excel 清单 → Parser 解析 → report.json → Renderer 渲染 → Word 实施文档
 ```
 
-技术栈：Python 3.x + pandas + python-docx + docxtpl + Click + Flask + FastMCP
+技术栈：Python 3.x + pandas + python-docx + docxtpl + Click + Flask
 
 ## 代码文件用途一览
 
@@ -22,8 +22,6 @@ Excel 清单 → Parser 解析 → report.json → Renderer 渲染 → Word 实�
 | **渲染层** | |
 | `src/renderer/__init__.py` | 导出 `TemplateRenderer`、`render_with_template` |
 | `src/renderer/template_renderer.py` | 基于 report.json 生成 Word（docxtpl 模板 / 内置 5 章节渲染） |
-| **MCP** | |
-| `src/mcp/server.py` | MCP 工具：`opspilot_analyze` / `opspilot_generate` / `opspilot_run` |
 | **Web 配置中心** | |
 | `src/web/app.py` | Flask 应用工厂 |
 | `src/web/routes/config.py` | 配置读写 API（GET/PUT config、priority-rules、action-library、sheet-column-mapping、batch-save） |
@@ -34,18 +32,13 @@ Excel 清单 → Parser 解析 → report.json → Renderer 渲染 → Word 实�
 | **配置与产出** | |
 | `config/rules.yaml` | 业务规则（优先级、操作库、列映射、高危关键词等），**禁止在代码中硬编码** |
 | `templates/template.docx` | Word 模板（Jinja2 占位符） |
-| `output/report.json` | 中间态数据，协议见 `docs/report_schema.md` |
+| `output/report.json` | 中间态数据 |
 
 ## 关键依赖关系
 
 - Parser / Renderer 均依赖 `config/rules.yaml`，通过构造函数传入 `config_path`
 - CLI `analyze` → `ExcelParser.parse()` → 写 `report.json`；`generate` → `TemplateRenderer.render(report, ...)` → 写 Word
-- Web 修改的配置直接写入 `rules.yaml`，CLI 与 MCP 共用同一配置
-
-## 必读文档
-
-- **协议**：`docs/report_schema.md`（report.json 字段与版本）
-- **架构与接口**：`docs/ARCHITECTURE_OVERVIEW.md`（模块职责、公开 API、测试说明）
+- Web 修改的配置直接写入 `rules.yaml`，CLI 共用同一配置
 
 ## 常用命令
 
@@ -61,9 +54,6 @@ python main.py run <excel_file>
 
 # 启动 Web 配置中心
 python main.py web
-
-# MCP 服务
-python -m src.mcp.server
 
 # 测试
 pytest tests/

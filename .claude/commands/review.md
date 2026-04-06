@@ -4,9 +4,6 @@
 
 ## 必读文档
 
-- `docs/OpsPilot_PRD.md` — 产品需求与验收标准
-- `docs/ARCHITECTURE_OVERVIEW.md` — 架构概览与模块职责
-- `docs/report_schema.md` — report.json 数据协议
 - `config/rules.yaml` — 业务规则配置
 
 ## 审查清单
@@ -30,9 +27,8 @@
 - [ ] 操作类型自动识别：冲突确认机制
 - [ ] 备份与回滚：版本保留上限、回滚二次确认
 
-### 4. CLI / MCP（`main.py`、`src/mcp/`）
+### 4. CLI（`main.py`）
 - [ ] analyze / generate / run 三命令是否完整
-- [ ] MCP 工具是否暴露对应能力
 
 ### 5. 测试覆盖（`tests/`）
 - [ ] 单元测试是否覆盖核心解析与渲染逻辑
